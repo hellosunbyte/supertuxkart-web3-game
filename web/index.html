@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperTuxKart — browser build</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; background: #17202c; color: #fff; font: 16px system-ui; text-align: center; }
+  main { max-width: 1100px; margin: auto; padding: 16px; }
+  #game, #welcome { width: 100%; aspect-ratio: 16/9; border: 0; background: #101823; }
+  #welcome { display: grid; place-items: center; }
+  #game:fullscreen { width: 100vw; height: 100vh; }
+  [hidden] { display: none !important; }
+  button { padding: 12px 22px; margin: 8px; font: inherit; cursor: pointer; }
+  #log { text-align: left; max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+</style>
+<main>
+  <h1>SuperTuxKart</h1>
+  <p id="status" role="status">Loading game files…</p>
+  <button id="play" disabled>Play</button>
+  <button id="fullscreen" disabled>Fullscreen</button>
+  <div id="welcome">Press Play when the game is ready.</div>
+  <div id="session"></div>
+  <p>Use Pause / Menu to resume, restart, or exit a race. Quit game is available throughout play, including fullscreen.</p>
+  <details><summary>Game log</summary><pre id="log"></pre></details>
+</main>
+<script>
+  const status = document.getElementById('status');
+  const play = document.getElementById('play');
+  const fullscreen = document.getElementById('fullscreen');
+  const welcome = document.getElementById('welcome');
+  const session = document.getElementById('session');
+  let game;
+  let running = false;
+  let played = false;
+  let saveWarning = '';
+  let fullscreenExit = Promise.resolve();
+  function log(text) {
+    const output = document.getElementById('log');
+    output.textContent = (output.textContent + text + '\n').slice(-24000);
+    output.scrollTop = output.scrollHeight;
+  }
+  async function leaveFullscreen() {
+    // Exit before disposing the canvas, avoiding an empty fullscreen view.
+    if (document.fullscreenElement) {
+      try { await document.exitFullscreen(); }
+      catch (error) { log('Could not exit fullscreen: ' + error.message); }
+    }
+  }
+  function prepareSession() {
+    running = false;
+    play.disabled = true;
+    fullscreen.disabled = true;
+    welcome.hidden = false;
+    status.textContent = played ? 'Getting ready to play again…' : 'Loading game files…';
+    // Quit destroys C++ globals. A fresh iframe releases the old Wasm memory,
+    // workers, audio, and timers without reloading this launcher page.
+    // IndexedDB persists across these isolated game sessions.
+    if (game) game.remove();
+    game = document.createElement('iframe');
+    game.id = 'game';
+    game.title = 'SuperTuxKart game';
+    game.allow = 'autoplay; fullscreen';
+    game.hidden = true;
+    game.src = 'game.html';
+    session.appendChild(game);
+  }
+  window.addEventListener('message', async event => {
+    // Accept lifecycle events only from our active same-origin game frame.
+    if (!game || event.source !== game.contentWindow || event.origin !== location.origin ||
+        event.data?.source !== 'stk-browser') return;
+    const { type, text } = event.data;
+    if (type === 'log') { log(text); return; }
+    if (type === 'loading') {
+      if (!running) status.textContent = text;
+    } else if (type === 'ready') {
+      play.disabled = false;
+      play.textContent = played ? 'Play again' : 'Play';
+      status.textContent = saveWarning || (played ? 'Game closed. Ready to play again.' : 'Ready to race.');
+    } else if (type === 'running') {
+      status.textContent = 'Game running. Click the game to focus keyboard controls.';
+    } else if (type === 'stopping') {
+      running = false;
+      fullscreen.disabled = true;
+      status.textContent = 'Saving progress…';
+      const stoppedGame = game;
+      fullscreenExit = leaveFullscreen().then(() => {
+        stoppedGame.hidden = true;
+        welcome.hidden = false;
+      });
+    } else if (type === 'exited') {
+      saveWarning = event.data.saveError ? 'Could not save the last session. You can play again.' : '';
+      if (text) log(text);
+      await fullscreenExit;
+      prepareSession();
+    } else if (type === 'load-error') {
+      status.textContent = text;
+    }
+  });
+  play.addEventListener('click', () => {
+    play.disabled = true;
+    played = true;
+    running = true;
+    fullscreen.disabled = false;
+    welcome.hidden = true;
+    game.hidden = false;
+    status.textContent = 'Starting SuperTuxKart…';
+    // Synchronous invocation preserves the click's activation for WebAudio.
+    game.contentWindow.startGame();
+  });
+  fullscreen.addEventListener('click', () => {
+    if (running) game.requestFullscreen().catch(error => { status.textContent = error.message; });
+  });
+  if (!crossOriginIsolated) {
+    status.textContent = 'Missing isolation headers. Run this build with web/serve.py.';
+  } else {
+    prepareSession();
+  }
+</script>
+</html>

@@ -1,3 +1,4 @@
+// Browser port: see web/UPSTREAM.md; guards exclude native-only APIs from Wasm.
 //  SuperTuxKart - a fun racing game with go-kart
 //  Copyright (C) 2009-2015 Joerg Henrichs
 //
@@ -673,6 +674,7 @@ begin:
 
     GE::setVideoDriver(m_device->getVideoDriver());
 
+#ifdef _IRR_COMPILE_WITH_VULKAN_
     GE::GEVulkanDriver* vk = GE::getVKDriver();
     if (vk)
     {
@@ -695,6 +697,7 @@ begin:
             break;
         }
     }
+#endif
     // Assume sp is supported
     CentralVideoSettings::m_supports_sp = true;
     CVS->init();
@@ -1432,13 +1435,13 @@ scene::ISceneNode *IrrDriver::addSphere(float radius,
     }
 #endif
 
-#ifndef SERVER_ONLY
+#if !defined(SERVER_ONLY) && defined(_IRR_COMPILE_WITH_VULKAN_)
     bool vk = (GE::getVKDriver() != NULL);
     if (vk)
         GE::getGEConfig()->m_convert_irrlicht_mesh = true;
 #endif
     scene::IMeshSceneNode *node = m_scene_manager->addMeshSceneNode(mesh);
-#ifndef SERVER_ONLY
+#if !defined(SERVER_ONLY) && defined(_IRR_COMPILE_WITH_VULKAN_)
     if (vk)
         GE::getGEConfig()->m_convert_irrlicht_mesh = false;
 #endif
@@ -1877,7 +1880,7 @@ void IrrDriver::setAmbientLight(const video::SColorf &light, bool force_SH_compu
 {
 #ifndef SERVER_ONLY
     video::SColorf color = light;
-    if (m_video_driver->getDriverType() != EDT_VULKAN)
+    if (m_video_driver->getDriverType() != video::EDT_VULKAN)
     {
         color.r = powf(color.r, 1.0f / 2.2f);
         color.g = powf(color.g, 1.0f / 2.2f);
@@ -2441,7 +2444,7 @@ scene::ISceneNode *IrrDriver::addLight(const core::vector3df &pos,
     else
     {
         scene::ILightSceneNode* light;
-        if (m_video_driver->getDriverType() == EDT_VULKAN && sun_)
+        if (m_video_driver->getDriverType() == video::EDT_VULKAN && sun_)
         {
             light = m_scene_manager->addLightSceneNode(parent, pos,
                 video::SColorf(r, g, b, 0.2f), 0.26f * M_PI / 180.0f);
@@ -2453,7 +2456,7 @@ scene::ISceneNode *IrrDriver::addLight(const core::vector3df &pos,
             video::SColorf color(r, g, b, 1.0f);
             light = m_scene_manager->addLightSceneNode(parent, pos, color);
             light->setRadius(radius);
-            if (m_video_driver->getDriverType() == EDT_VULKAN)
+            if (m_video_driver->getDriverType() == video::EDT_VULKAN)
             {
                 video::SLight& data = light->getLightData();
                 data.Attenuation.X = energy;
