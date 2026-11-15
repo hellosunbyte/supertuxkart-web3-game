@@ -43,6 +43,15 @@
   function tellLauncher(type, extra = {}) {
     parent.postMessage({ source: 'stk-browser', type, ...extra }, location.origin);
   }
+  function failInitialization(reason) {
+    if (stopping) return;
+    stopping = true;
+    ready = false;
+    clearInterval(controlsTimer);
+    Module['disposeBrowserHooks']?.();
+    tellLauncher('log', { text: 'Game initialization failed: ' + reason });
+    tellLauncher('load-error', { text: 'Could not load the game. Check your connection and reload to try again.' });
+  }
   async function finishSession(text) {
     if (stopping) return;
     stopping = true;
@@ -66,10 +75,19 @@
     canvas,
     print: text => tellLauncher('log', { text }),
     printErr: text => tellLauncher('log', { text }),
-    setStatus: text => { if (text && !started) tellLauncher('loading', { text }); },
-    onAbort: reason => finishSession('Game stopped: ' + reason),
+    setStatus: text => { if (text && !started && !stopping) tellLauncher('loading', { text }); },
+    onAbort: reason => {
+      if (started) return finishSession('Game stopped: ' + reason);
+      // A failed download/initialization must not create another iframe and
+      // retry the same large preload forever. Leave the launcher in an error state.
+      failInitialization(reason);
+    },
     onExit: () => finishSession('Game closed.'),
-    onRuntimeInitialized: () => { ready = true; tellLauncher('ready'); }
+    onRuntimeInitialized: () => {
+      if (stopping) return;
+      ready = true;
+      tellLauncher('ready');
+    }
   };
   // Optional native arguments also support reproducible quick-race tests;
   // the launcher normally supplies none and opens the regular game menus.
@@ -125,9 +143,14 @@
   canvas.addEventListener('keydown', event => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
   });
+  // Asset-pack fetch failures in the pinned SDK reject a promise without
+  // calling onAbort. Surface those failures instead of leaving "Downloading…".
+  window.addEventListener('unhandledrejection', event => {
+    if (!started) failInitialization(event.reason);
+  });
   const script = document.createElement('script');
   script.src = 'supertuxkart.js';
-  script.onerror = () => tellLauncher('load-error', { text: 'Game files missing. Build the game before serving this directory.' });
+  script.onerror = () => failInitialization('Game script failed to download.');
   document.body.appendChild(script);
 </script>
 </html>

@@ -88,6 +88,9 @@ target_link_options(supertuxkart PRIVATE
     -sFULL_ES2=1 -sFULL_ES3=1 -sEXIT_RUNTIME=1
     -sEXPORTED_RUNTIME_METHODS=callMain,FS -sINVOKE_RUN=0
     -lidbfs.js "--pre-js=${PROJECT_SOURCE_DIR}/web/pre.js"
+    # Versioned IndexedDB asset cache avoids fetching the full pack for every
+    # fresh iframe/replay. Emscripten falls back to downloading if storage fails.
+    --use-preload-cache
     "--preload-file=${WEB_ASSETS}@/data")
 # A --pre-js filename in link flags does not track its contents automatically.
 # Re-link whenever the browser save/lifecycle glue changes, avoiding stale JS.

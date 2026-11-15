@@ -95,6 +95,11 @@
       prepareSession();
     } else if (type === 'load-error') {
       status.textContent = text;
+      play.disabled = true;
+      fullscreen.disabled = true;
+      // Release any partially initialized Wasm memory/workers. The player can
+      // reload explicitly once the connection or deployment has been repaired.
+      game.remove();
     }
   });
   play.addEventListener('click', () => {
@@ -111,8 +116,25 @@
   fullscreen.addEventListener('click', () => {
     if (running) game.requestFullscreen().catch(error => { status.textContent = error.message; });
   });
-  if (!crossOriginIsolated) {
-    status.textContent = 'Missing isolation headers. Run this build with web/serve.py.';
+  function compatibilityError() {
+    if (!window.isSecureContext) return 'This game needs a secure connection. Open this site over HTTPS.';
+    if (!window.crossOriginIsolated) return 'This game cannot start because the website’s browser isolation settings are missing. Please contact the site owner.';
+    if (typeof WebAssembly !== 'object' || typeof WebAssembly.instantiate !== 'function')
+      return 'This browser cannot run WebAssembly games. Try an up-to-date desktop browser.';
+    if (typeof SharedArrayBuffer !== 'function')
+      return 'This browser cannot run the game’s shared-memory features. Try an up-to-date desktop browser.';
+    // Check before downloading the large asset pack. Use a separate canvas so
+    // this probe cannot interfere with SDL's context, and release its GPU resources.
+    let gl;
+    try { gl = document.createElement('canvas').getContext('webgl2'); }
+    catch (error) { /* Disabled or unavailable graphics are handled below. */ }
+    if (!gl) return 'WebGL 2 is unavailable. Enable hardware acceleration or try another desktop browser.';
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return '';
+  }
+  const unsupported = compatibilityError();
+  if (unsupported) {
+    status.textContent = unsupported;
   } else {
     prepareSession();
   }

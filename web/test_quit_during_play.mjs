@@ -1,19 +1,12 @@
 // Exercise unfinished games through the visible browser controls, including
 // pause ownership, cancelling confirmation, fullscreen, final saves, and replay.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { launchBrowser } from './browser_test_utils.mjs';
 import { fileURLToPath } from 'node:url';
-const require = createRequire(new URL('../build-web-tools/browser-test/package.json', import.meta.url));
-const { chromium } = require('playwright');
 const artifacts = new URL('../build-web-tools/browser-test/quit-during-play/', import.meta.url);
 mkdirSync(artifacts, { recursive: true });
-const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const browser = await chromium.launch({
-  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync(chrome) ? chrome : undefined),
-  headless: true,
-  args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-});
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 page.setDefaultTimeout(120000);
 const errors = [];
