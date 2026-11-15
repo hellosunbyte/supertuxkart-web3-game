@@ -2,19 +2,12 @@
 // navigating the launcher. Includes fullscreen exit and a final-save roundtrip.
 // Setup/run instructions are in web/README.md; Playwright stays in ignored tools.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { launchBrowser } from './browser_test_utils.mjs';
 import { fileURLToPath } from 'node:url';
-const require = createRequire(new URL('../build-web-tools/browser-test/package.json', import.meta.url));
-const { chromium } = require('playwright');
 const artifacts = new URL('../build-web-tools/browser-test/replay/', import.meta.url);
 mkdirSync(artifacts, { recursive: true });
-const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const browser = await chromium.launch({
-  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync(chrome) ? chrome : undefined),
-  headless: true,
-  args: ['--enable-webgl', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
-});
+const browser = await launchBrowser();
 const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
 const page = await context.newPage();
 page.setDefaultTimeout(180000);

@@ -50,8 +50,11 @@ python3 web/serve.py
 ```
 
 Open **http://localhost:8080** and click **Play**. The initial download is large
-because this first implementation preloads game data. Later builds reuse compiled
-dependencies, so editing C++ usually only rebuilds affected files.
+because this implementation preloads game data. Emscripten caches the asset pack
+in IndexedDB for subsequent sessions and page loads, with version checks when the
+pack changes. If browser storage is unavailable or full, it falls back to a
+download. This asset cache is separate from player saves. Later builds reuse
+compiled dependencies, so editing C++ usually only rebuilds affected files.
 
 On first launch, keep **Offline Account** selected, choose a local player name,
 and click the green **OK** button. Confirm your player on the Login screen,
@@ -85,10 +88,56 @@ sessions in Chrome (with the local server running):
 npm install --prefix build-web-tools/browser-test playwright@1.58.2
 node web/test_replay.mjs
 node web/test_quit_during_play.mjs
+node web/test_browser_startup.mjs
+node web/test_full_race.mjs
 ```
 
 The test uses Chrome installed on macOS. Elsewhere, install Playwright's Chromium
 or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to your browser executable.
+
+### Full-race checks and measurements
+
+`test_full_race.mjs` uses the game's native lap-based profiling mode: two AI karts
+must complete actual laps, emit finish statistics, and exit through normal native
+shutdown. It verifies final-save restoration and replay readiness without a page
+reload, then checks a launcher reload: the asset pack must download only once
+across all sessions and reloads. Profiling skips the human results screen; it does
+not verify human driving,
+progression/highscores, gamepad behavior, or audible sound.
+
+For a longer content check:
+
+```sh
+RACE_TRACKS=olivermath,lighthouse RACE_LAPS=3 node web/test_full_race.mjs
+```
+
+Override `GAME_URL` to test another local port or a deployed build. Optionally set
+`RACE_TIMEOUT_MS` (default 600000 per wait) for slower machines. Logs, screenshots,
+and `report.json` are written under ignored
+`build-web-tools/browser-test/full-race/`. The report includes browser/GPU identity,
+asset response sizes and resource timings, startup time, sampled Wasm memory,
+browser animation-frame intervals, and native kart finish times. Repeated asset
+responses can come from cache: use resource `transferSize` when inspecting network
+traffic, rather than adding up response `Content-Length` values.
+The two documented color-emoji font diagnostics are recorded as known limitations;
+other native error/fatal messages fail the full-race check.
+
+Browser checks default to SwiftShader for reproducible functional coverage.
+To request the machine's GPU in a visible Chrome window:
+
+```sh
+BROWSER_GPU=hardware BROWSER_HEADLESS=0 node web/test_full_race.mjs
+```
+
+Check the reported renderer before interpreting measurements as hardware results.
+Frame intervals are browser scheduling samples, not a guaranteed game FPS; native
+profile "Average FPS" counts simulation updates and is not a render-rate metric.
+Localhost startup timings do not establish public-internet loading performance.
+
+`test_browser_startup.mjs` checks unavailable browser features without downloading
+the game, then verifies that actual missing JavaScript, Wasm, or data responses
+produce terminal initialization errors and dispose of the failed runtime. It also
+checks that an unavailable asset cache falls back to a download and reaches Play.
 
 ## Learn what changed
 
@@ -104,6 +153,8 @@ or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to your browser executable.
 | `web/index.html` | Persistent launcher, Play again, fullscreen exit, and game log. |
 | `web/game.html` | Isolated canvas/Wasm session; saves before the launcher replaces the terminated runtime. |
 | `web/serve.py` | HTTP server with WebAssembly MIME type and isolation headers. |
+| `web/test_full_race.mjs` | Native AI lap completion, save/replay checks, and measurement report. |
+| `web/test_browser_startup.mjs` | Compatibility gating and initialization-failure regression checks. |
 
 Imported compatibility work is credited in [UPSTREAM.md](UPSTREAM.md). Comments
 explain browser-specific decisions at the code that implements them.
