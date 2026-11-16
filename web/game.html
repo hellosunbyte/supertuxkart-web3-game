@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperTuxKart game session</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #000; }
+  body { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; color: #fff; font: 16px system-ui; }
+  #controls { display: flex; justify-content: flex-end; gap: 8px; padding: 6px 10px; background: #17202c; }
+  button { padding: 7px 14px; font: inherit; cursor: pointer; }
+  #view { min-height: 0; display: grid; place-items: center; container-type: size; }
+  /* Keep layout independent of SDL's temporary 1x1 bootstrap canvas. Explicit
+     dimensions avoid a square canvas clipping the game's bottom-row controls. */
+  canvas { display: block; width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); aspect-ratio: 16/9; outline: none; }
+  dialog { max-width: min(420px, 80vw); border: 0; border-radius: 12px; padding: 24px; color: #fff; background: #243247; }
+  dialog::backdrop { background: rgb(0 0 0 / 65%); }
+  dialog h1 { margin-top: 0; font-size: 22px; }
+  .actions { display: flex; justify-content: flex-end; gap: 10px; }
+  #confirm-quit { background: #a92b35; color: #fff; border: 1px solid #ef8d96; }
+</style>
+<nav id="controls" aria-label="Game controls">
+  <button id="pause" disabled>Pause / Menu</button>
+  <button id="quit" disabled>Quit game</button>
+</nav>
+<div id="view"><canvas id="canvas" width="960" height="540" tabindex="0" aria-label="SuperTuxKart game"></canvas></div>
+<dialog id="quit-dialog" aria-labelledby="quit-title" aria-describedby="quit-description">
+  <h1 id="quit-title">Quit this game?</h1>
+  <p id="quit-description">Your current race or activity will end. Unfinished races won't record a result. Saved progress will be kept.</p>
+  <div class="actions">
+    <button id="cancel-quit" autofocus>Keep playing</button>
+    <button id="confirm-quit">Quit game</button>
+  </div>
+</dialog>
+<script>
+  const canvas = document.getElementById('canvas');
+  const pauseButton = document.getElementById('pause');
+  const quitButton = document.getElementById('quit');
+  const quitDialog = document.getElementById('quit-dialog');
+  let ready = false;
+  let started = false;
+  let stopping = false;
+  function tellLauncher(type, extra = {}) {
+    parent.postMessage({ source: 'stk-browser', type, ...extra }, location.origin);
+  }
+  function failInitialization(reason) {
+    if (stopping) return;
+    stopping = true;
+    ready = false;
+    clearInterval(controlsTimer);
+    Module['disposeBrowserHooks']?.();
+    tellLauncher('log', { text: 'Game initialization failed: ' + reason });
+    tellLauncher('load-error', { text: 'Could not load the game. Check your connection and reload to try again.' });
+  }
+  async function finishSession(text) {
+    if (stopping) return;
+    stopping = true;
+    pauseButton.disabled = true;
+    quitButton.disabled = true;
+    clearInterval(controlsTimer);
+    tellLauncher('stopping');
+    Module['disposeBrowserHooks']?.();
+    let saveError = false;
+    try {
+      // Native teardown writes the latest config/profile. Persist those writes
+      // before the parent replaces this frame and its virtual filesystem.
+      await Module['syncSaves']?.();
+    } catch (error) {
+      saveError = true;
+      tellLauncher('log', { text: 'Could not save progress: ' + error.message });
+    }
+    tellLauncher('exited', { text, saveError });
+  }
+  var Module = {
+    canvas,
+    print: text => tellLauncher('log', { text }),
+    printErr: text => tellLauncher('log', { text }),
+    setStatus: text => { if (text && !started && !stopping) tellLauncher('loading', { text }); },
+    onAbort: reason => {
+      if (started) return finishSession('Game stopped: ' + reason);
+      // A failed download/initialization must not create another iframe and
+      // retry the same large preload forever. Leave the launcher in an error state.
+      failInitialization(reason);
+    },
+    onExit: () => finishSession('Game closed.'),
+    onRuntimeInitialized: () => {
+      if (stopping) return;
+      ready = true;
+      tellLauncher('ready');
+    }
+  };
+  // Optional native arguments also support reproducible quick-race tests;
+  // the launcher normally supplies none and opens the regular game menus.
+  window.startGame = function (args = []) {
+    if (!ready || started || stopping) return;
+    started = true;
+    canvas.focus();
+    Module.callMain(['--logbuffer=1', '--log=nocolor', ...args]);
+    if (!stopping) {
+      quitButton.disabled = false;
+      updateControls();
+      tellLauncher('running');
+    }
+  };
+  function updateControls() {
+    if (started && !stopping) pauseButton.disabled = !Module._browser_can_pause();
+  }
+  const controlsTimer = setInterval(updateControls, 500);
+  pauseButton.addEventListener('click', () => {
+    if (!started || stopping || quitDialog.open) return;
+    Module._browser_pause_menu();
+    canvas.focus();
+  });
+  quitButton.addEventListener('click', () => {
+    if (!started || stopping || quitDialog.open) return;
+    Module._browser_prepare_quit();
+    quitDialog.showModal();
+  });
+  function cancelQuit() {
+    quitDialog.close();
+    Module._browser_cancel_quit();
+    canvas.focus();
+  }
+  document.getElementById('cancel-quit').addEventListener('click', cancelQuit);
+  quitDialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    cancelQuit();
+  });
+  document.getElementById('confirm-quit').addEventListener('click', () => {
+    quitDialog.close();
+    quitButton.disabled = true;
+    pauseButton.disabled = true;
+    Module._browser_quit_game();
+  });
+  // SDL listens for keys at document/window level. While an HTML modal is open,
+  // keep Escape/Enter/Tab inside that modal instead of also controlling the kart
+  // or opening a second native pause menu. Browser default button actions remain.
+  for (const type of ['keydown', 'keyup']) {
+    window.addEventListener(type, event => {
+      if (quitDialog.open) event.stopImmediatePropagation();
+    }, true);
+  }
+  canvas.addEventListener('keydown', event => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
+  });
+  // Asset-pack fetch failures in the pinned SDK reject a promise without
+  // calling onAbort. Surface those failures instead of leaving "Downloading…".
+  window.addEventListener('unhandledrejection', event => {
+    if (!started) failInitialization(event.reason);
+  });
+  const script = document.createElement('script');
+  script.src = 'supertuxkart.js';
+  script.onerror = () => failInitialization('Game script failed to download.');
+  document.body.appendChild(script);
+</script>
+</html>

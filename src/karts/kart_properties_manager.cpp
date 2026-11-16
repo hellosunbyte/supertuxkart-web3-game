@@ -1,3 +1,4 @@
+// Browser port: see web/UPSTREAM.md; guards exclude native-only APIs from Wasm.
 //  SuperTuxKart - a fun racing game with go-kart
 //
 //  Copyright (C) 2004-2015 Ingo Ruhnke <grumbel@gmx.de>
@@ -28,6 +29,7 @@
 #include "graphics/material_manager.hpp"
 #include "guiengine/engine.hpp"
 #include "io/file_manager.hpp"
+#include <IFileSystem.h> // Used directly; do not depend on Vulkan headers to include it.
 #include "karts/kart_properties.hpp"
 #include "karts/xml_characteristic.hpp"
 #include "utils/log.hpp"
@@ -535,7 +537,7 @@ void KartPropertiesManager::setFavoriteKartStatus(FavoriteStatus *status)
             }
         }
     }
-    
+
     std::map<std::string, std::vector<int> > &g2i = m_groups_2_indices;
     std::vector<std::string> &gn = m_all_groups;
     gn.clear();
@@ -728,11 +730,13 @@ void KartPropertiesManager::onDemandLoadKartTextures(
     if (STKProcess::getType() != PT_MAIN || kart_list.empty())
         return;
 
+    #ifdef _IRR_COMPILE_WITH_VULKAN_
     GE::GEVulkanDriver* gevd = GE::getVKDriver();
     if (!gevd)
         return;
     gevd->waitIdle();
     gevd->setDisableWaitIdle(true);
+    #endif
 
     std::set<std::string> karts_folder;
     for (auto& dir : m_kart_search_path)
@@ -792,9 +796,11 @@ void KartPropertiesManager::onDemandLoadKartTextures(
         }
     }
 
+    #ifdef _IRR_COMPILE_WITH_VULKAN_
     gevd->setDisableWaitIdle(false);
     if (unloaded_unused)
         gevd->handleDeletedTextures();
+    #endif
 #endif
 }   // onDemandLoadKartTextures
 
