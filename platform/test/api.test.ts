@@ -127,6 +127,28 @@ test('concurrent first writes cannot both succeed', async () => {
   const result = await Promise.all([client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('One') }), client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Two') })]);
   assert.deepEqual(result.map(r => r.status).sort(), [200, 409]);
 });
+test('in-game selected names sync with progress; conflicts cannot rename the account', async () => {
+  const { client } = await signIn();
+  const cases = [
+    { playersXml: '<players><current player="Selected"/><player name="First"/><player name="Selected"/></players>', expected: 'Selected' },
+    { playersXml: '<players><current player="Anne &amp; Jo"/><player name="Other"/><player name="Anne &amp; Jo"/></players>', expected: 'Anne & Jo' },
+    { playersXml: '<players><player name="First"/><player name="Second"/></players>', expected: 'Anne & Jo' },
+    { playersXml: '<players><current player="Missing"/><player name="Unselected"/></players>', expected: 'Anne & Jo' },
+    { playersXml: '<players><current player="Guest"/><player guest="true" name="Guest"/></players>', expected: 'Anne & Jo' },
+    { playersXml: '<players/>', expected: 'Anne & Jo' },
+    { playersXml: '<players><player name="Solo Racer"/></players>', expected: 'Solo Racer' },
+  ];
+  for (const [revision, entry] of cases.entries()) {
+    const saved = await client.request('/api/progress', 'PUT', { baseRevision: revision, payload: { schemaVersion: 1, playersXml: entry.playersXml } });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.data.displayName, entry.expected);
+    assert.equal((await client.request('/api/session')).data.player.displayName, entry.expected);
+  }
+  const stale = await client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Stale name') });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.data.current.displayName, 'Solo Racer');
+  assert.equal((await client.request('/api/session')).data.player.displayName, 'Solo Racer');
+});
 test('a stale tab cannot read or write progress after the browser switches accounts', async () => {
   const alice = await signIn(), bob = await signIn();
   const stale = { 'x-stk-player': alice.playerId };

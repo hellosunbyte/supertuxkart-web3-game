@@ -54,6 +54,10 @@
   Module['uploadCloudProgress'] = async function (fs) {
     if (!activePlayer || !enabled) return;
     const payload = read(fs, root);
-    if (payload) await rpc('save', { playerId: activePlayer, payload });
+    if (payload) {
+      const result = await rpc('save', { playerId: activePlayer, payload });
+      if (result?.synced && typeof result.displayName === 'string')
+        Module['platformIdentity'] = Object.freeze({ id: activePlayer, displayName: result.displayName });
+    }
   };
 })();

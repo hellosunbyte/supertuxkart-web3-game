@@ -28,13 +28,13 @@ milestone gets its own commit. No contracts or production deployment are include
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
 | 3. Cloud saves | Revision-controlled saves and ownership checks. Preserve progress safely across sessions/devices. | Cloud API complete; stale/concurrent saves and client inventory grants are rejected. Wallet-loss recovery is deferred. |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
-| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 16 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 17 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
 
 ## Player flow
 
-Guest → play locally → connect wallet → sign a sign-in message (no gas) →
-create/link player → choose existing local or cloud progress when necessary →
-play → sync progress → sign in on another device → restore the cloud copy.
+Play as a guest or connect wallet → sign in (no gas) → choose local/cloud progress
+when necessary → press Play → create or choose a player inside the game →
+play → sync progress and selected name → sign in on another device → restore.
 
 Any future wallet-loss recovery must preserve the player ID, revoke old sessions/credentials,
 and prove control of the new wallet plus a previously established recovery factor.
@@ -65,9 +65,9 @@ provided beside it as `supertuxkart-phase-02.bundle` for importing the branch.
 Docker is installed but its daemon is unavailable. Database integration tests will
 use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
 
-Verification so far: `npm run typecheck` and `npm test` pass (16 tests). SQL tests
+Verification so far: `npm run typecheck` and `npm test` pass (17 tests). SQL tests
 exercise real migrations, transactions and wallet signatures. DOM checks exercise
-first-save syncing, all three conflict choices, profile editing, credential stripping
+first-save syncing, all three conflict choices, in-game profile naming, credential stripping
 and account namespaces. A stale tab is rejected when browser cookies switch players.
 JavaScript syntax checks and `git diff --check` also pass.
 
@@ -82,11 +82,13 @@ See [platform/README.md](platform/README.md) for setup, player behavior, ownersh
 boundaries, and commands to run the remaining checks. No contracts are deployed,
 no on-chain transactions have been submitted, and no purchase/indexer flow exists yet.
 
-## Profile save feedback follow-up
+## In-game player naming
 
-The profile form now shows unsaved changes, a disabled “Saving…” button while a
-request is in flight, and a persistent confirmation naming the saved player.
-Errors appear beside the form with a retry action; unsuccessful requests retain
-the edited name. Account/cloud status updates no longer reset a draft or replace
-the form's confirmation. The existing DOM test covers pending requests, success,
-failure and retry against the real profile API.
+Wallet connection only authenticates. The launcher name form is removed; the
+existing native player-profile screen handles names after Play. Registered
+players' selected native name syncs with progress in one database transaction,
+so a stale save cannot rename an account. A single profile can supply its name
+before a current-player selection exists; ambiguous or guest profiles do not
+overwrite the account name. Tests cover multiple profiles, XML-escaped names,
+cloud conflicts, and the launcher flow without a name form. Existing launcher-only
+names are reconciled with the native profile on the next successful sync.

@@ -97,10 +97,9 @@ try {
   const id = await page.getAttribute('#account', 'data-player');
   assert.match(id!, /^[a-f0-9-]{36}$/);
   assert.equal(await frame.evaluate(() => (window as any).ENV.XDG_CONFIG_HOME), `/persist/accounts/${id}/config`);
-  await page.fill('#display-name', 'Cloud Racer'); await page.click('#profile-form button');
-  await page.waitForFunction(() => document.getElementById('profile-feedback')?.dataset.state === 'success');
-  assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Cloud Racer');
+  assert.equal(await page.locator('#profile-form').count(), 0);
   await writeProgress(page, 'First device');
+  assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'First device');
   const cloud = (await db.query('SELECT payload FROM cloud_saves WHERE player_id = $1', [id])).rows[0].payload;
   assert.match(cloud.playersXml, /First device/); assert.doesNotMatch(cloud.playersXml, /upstream-secret/);
   const second = await device();
@@ -126,7 +125,7 @@ try {
   await page.waitForFunction(() => document.getElementById('account-status')?.textContent?.includes('cancelled'));
   assert.equal(await page.getAttribute('#account', 'data-player'), 'guest');
   assert.deepEqual(errors, []);
-  console.log('Browser integration passed: sign-in, namespace isolation, profile edit, cloud restore, conflict selection, wallet change, rejection, offline guest.');
+  console.log('Browser integration passed: sign-in, namespace isolation, game-profile naming, cloud restore, conflict selection, wallet change, rejection, offline guest.');
 } finally {
   for (const context of contexts) await context.close();
   await browser.close(); await db.close();

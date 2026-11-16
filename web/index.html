@@ -13,22 +13,6 @@
   [hidden] { display: none !important; }
   button { padding: 12px 22px; margin: 8px; font: inherit; cursor: pointer; }
   #log { text-align: left; max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
-  #profile-form { max-width: 620px; margin: 20px auto 28px; padding: 20px; border: 1px solid #435166; border-radius: 12px; background: #121c29; text-align: left; }
-  #profile-form label { display: block; margin-bottom: 8px; font-weight: 600; }
-  .profile-controls { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
-  #display-name { flex: 1; min-width: 160px; width: 0; padding: 12px; border: 1px solid #65758d; border-radius: 6px; font: inherit; }
-  #save-profile { margin: 0; min-width: 150px; border: 1px solid #8496b0; border-radius: 6px; }
-  #save-profile[data-state="success"] { background: #19533b; color: #dbffe9; border-color: #4ba97d; }
-  #profile-form[aria-busy="true"] { border-color: #7eb5ff; }
-  #profile-hint { margin: 10px 0 0; color: #b5c2d4; font-size: 14px; }
-  #profile-feedback { margin: 14px 0 0; padding: 12px 14px; border: 1px solid #5a6f8b; border-radius: 6px; overflow-wrap: anywhere; }
-  #profile-feedback[data-state="saving"] { background: #1d334d; border-color: #7eb5ff; color: #e2eeff; }
-  #profile-feedback[data-state="success"] { background: #143a2b; border-color: #4ba97d; color: #d4ffe5; }
-  #profile-feedback[data-state="error"] { background: #49242d; border-color: #ef929e; color: #ffe4e8; }
-  @media (max-width: 520px) {
-    .profile-controls { flex-direction: column; }
-    #display-name { box-sizing: border-box; width: 100%; }
-  }
 </style>
 <main>
   <h1>SuperTuxKart</h1>
@@ -36,15 +20,7 @@
     <p id="account-status" role="status">Guest play is available.</p>
     <button id="connect-wallet">Connect wallet</button>
     <button id="sign-out" hidden>Sign out</button>
-    <form id="profile-form" hidden aria-busy="false">
-      <label for="display-name">Player name</label>
-      <div class="profile-controls">
-        <input id="display-name" maxlength="40" required autocomplete="nickname" aria-describedby="profile-hint profile-feedback">
-        <button id="save-profile" type="submit">Save profile</button>
-      </div>
-      <p id="profile-hint">Your player name is saved to your account.</p>
-      <p id="profile-feedback" role="status" aria-live="polite" aria-atomic="true" hidden></p>
-    </form>
+    <p>Choose or create your player profile inside the game after pressing Play.</p>
   </section>
   <dialog id="save-conflict" aria-labelledby="conflict-title">
     <h2 id="conflict-title">Choose your progress</h2>

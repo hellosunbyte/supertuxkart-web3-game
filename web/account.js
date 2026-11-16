@@ -3,43 +3,16 @@
   const info = document.getElementById('account-status');
   const connect = document.getElementById('connect-wallet');
   const logout = document.getElementById('sign-out');
-  const profile = document.getElementById('profile-form');
-  const name = document.getElementById('display-name');
-  const saveProfile = document.getElementById('save-profile');
-  const profileFeedback = document.getElementById('profile-feedback');
   const dialog = document.getElementById('save-conflict');
   let player = null, config = null, busy = false, playing = false;
   let importGuest = false, sync = null, provider = null, signing = false;
   let generation = 0;
-  let editingPlayerId = null, profileState = 'idle';
   const text = message => { info.textContent = message; };
-  function profileMessage(message, state) {
-    profileState = state;
-    profileFeedback.textContent = message;
-    profileFeedback.dataset.state = state;
-    profileFeedback.hidden = !message;
-  }
   function render() {
     const registered = player?.kind === 'registered';
-    profile.hidden = !registered;
     logout.hidden = !registered;
     connect.textContent = registered ? 'Link another wallet' : 'Connect wallet';
-    // Refresh the input only when switching players. Other UI updates must not
-    // discard an edit or a failed save's draft.
-    if (registered && editingPlayerId !== player.id) {
-      editingPlayerId = player.id;
-      name.value = player.displayName;
-      profileMessage('', 'idle');
-    } else if (!registered) {
-      editingPlayerId = null;
-      profileMessage('', 'idle');
-    }
     for (const button of panel.querySelectorAll('button, input')) button.disabled = busy || playing;
-    const dirty = registered && name.value.trim() !== player.displayName;
-    saveProfile.textContent = profileState === 'saving' ? 'Saving…' : profileState === 'success' ? 'Saved' : profileState === 'error' ? 'Try again' : 'Save profile';
-    saveProfile.dataset.state = profileState;
-    saveProfile.disabled = busy || playing || !dirty;
-    profile.setAttribute('aria-busy', String(profileState === 'saving'));
     panel.dataset.player = registered ? player.id : 'guest';
   }
   async function api(path, method = 'GET', body) {
@@ -69,7 +42,7 @@
     try {
       [config] = await Promise.all([api('config'), refresh()]);
       attachProvider(window.ethereum);
-      text(player?.kind === 'registered' ? `Signed in as ${player.displayName}.` : 'Playing as a guest. Connect a wallet to save progress across devices.');
+      text(player?.kind === 'registered' ? 'Wallet connected. Press Play to continue with your in-game player.' : 'Playing as a guest. Connect a wallet to save progress across devices.');
     } catch { text('Guest play is available. Cloud accounts are currently unavailable.'); }
     render();
   })();
@@ -102,13 +75,15 @@
   async function save(payload, mine) {
     const state = sync;
     if (!state || state.blocked || state.generation !== mine) return { synced: false };
-    if (STKProgress.same(payload, state.last)) return { synced: true };
+    const selectedName = STKProgress.playerName(payload);
+    if (STKProgress.same(payload, state.last) && (!selectedName || selectedName === player.displayName)) return { synced: true, displayName: player.displayName };
     try {
       const result = await api('progress', 'PUT', { baseRevision: state.revision, payload });
       if (mine !== generation || state !== sync) return { synced: false };
       state.revision = result.revision; state.last = result.payload;
+      if (result.displayName) player.displayName = result.displayName;
       text(`Progress saved to cloud (revision ${result.revision}).`);
-      return { synced: true };
+      return { synced: true, displayName: player.displayName };
     } catch (error) {
       if (error.status === 401 || error.data?.error === 'account_changed') {
         generation++; sync = null; player = null; render();
@@ -189,7 +164,7 @@
       if (selected?.[0]?.toLowerCase() !== address.toLowerCase() || selectedChain.toLowerCase() !== config.chain.chainId) throw new Error('Wallet changed while signing. Please try again.');
       await api('auth/verify', 'POST', { id: challenge.id, signature });
       await refresh(); importGuest = wasGuest; changed();
-      text(`Signed in as ${player.displayName}.`);
+      text('Wallet connected. Press Play to choose or continue your player profile.');
     } catch (error) { text(error.code === 4001 ? 'Wallet request cancelled. Guest play remains available.' : error.message); }
     finally { signing = false; busy = false; render(); }
   });
@@ -199,35 +174,6 @@
     try { await api('logout', 'POST'); player = null; importGuest = false; changed(); text('Signed out. Guest progress stays on this device.'); }
     catch { text('Could not sign out. Check your connection and try again.'); }
     finally { busy = false; render(); }
-  });
-  profile.addEventListener('submit', async event => {
-    event.preventDefault(); if (busy || playing) return;
-    const displayName = name.value.trim();
-    if (!displayName) {
-      profileMessage('Enter a player name before saving.', 'error');
-      render(); name.focus(); return;
-    }
-    if (displayName === player?.displayName) return;
-    busy = true; profileMessage('Saving your profile…', 'saving'); render();
-    try {
-      const updated = await api('profile', 'PATCH', { displayName });
-      player.displayName = updated.displayName;
-      name.value = updated.displayName;
-      profileMessage(`Profile saved as “${updated.displayName}”.`, 'success');
-      text(`Signed in as ${updated.displayName}.`);
-    } catch (error) {
-      const message = error.data?.error === 'invalid_input' ? 'Use 1–40 characters for your player name.'
-        : error.status === 401 || error.status === 403 ? 'Your sign-in expired. Sign in again, then save your profile.'
-        : error.data?.error === 'account_changed' ? 'Your account changed in another tab. Reload before saving.'
-        : 'Could not save your profile. Your changes are still here. Please try again.';
-      profileMessage(message, 'error');
-    }
-    finally { busy = false; render(); }
-  });
-  name.addEventListener('input', () => {
-    const dirty = player?.kind === 'registered' && name.value.trim() !== player.displayName;
-    profileMessage(dirty ? 'You have unsaved changes.' : '', 'idle');
-    render();
   });
   window.addEventListener('stk-session-state', event => { playing = event.detail.running; render(); });
 })();

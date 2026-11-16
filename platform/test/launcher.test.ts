@@ -20,28 +20,25 @@ test('progress sanitizer removes upstream credentials and refuses malformed XML'
     const sanitized = (win as any).STKProgress.payload(xml('Racer'));
     assert.doesNotMatch(sanitized.playersXml, /upstream-secret|saved-user="123"/);
     assert.match(sanitized.playersXml, /name="Racer"/);
+    const selected = (win as any).STKProgress.payload('<players><current player="Anne &amp; Jo"/><player name="Other"/><player name="Anne &amp; Jo"/></players>');
+    assert.equal((win as any).STKProgress.playerName(selected), 'Anne & Jo');
+    assert.equal((win as any).STKProgress.playerName((win as any).STKProgress.payload('<players><player name="One"/><player name="Two"/></players>')), null);
     assert.throws(() => (win as any).STKProgress.payload('<players><broken></players>'));
     assert.throws(() => (win as any).STKProgress.payload('<!DOCTYPE players><players/>'));
   } finally { await win.happyDOM.close(); }
 });
 
-test('launcher signs in, syncs a new empty account, handles conflicts, and edits a profile', async () => {
+test('launcher signs in without naming, syncs game profiles, and handles conflicts', async () => {
   const db = await testDatabase();
   const app = buildApp(db, { origin, rateMax: 10000 });
   const win = new Window({ url: origin, settings: { disableJavaScriptFileLoading: true, disableJavaScriptEvaluation: true, disableIframePageLoading: true } });
   const bridgeWindow = new Window({ url: origin });
   const wallet = Wallet.createRandom();
   let cookie = '';
-  let profileGate: Promise<void> | null = null;
-  let failProfile = false;
   const handlers: Record<string, Function[]> = {};
   try {
     win.document.write(await source('index.html'));
     (win as any).fetch = async (path: string, options: any = {}) => {
-      if (path === '/api/profile' && options.method === 'PATCH') {
-        if (profileGate) await profileGate;
-        if (failProfile) return Response.json({ error: 'service_unavailable' }, { status: 503 });
-      }
       const response = await app.fetch(new Request(new URL(path, origin), { ...options, signal: undefined,
         headers: { ...options.headers, origin, cookie } }));
       if (response.headers.has('set-cookie')) cookie = response.headers.get('set-cookie')!.split(';')[0];
@@ -62,6 +59,8 @@ test('launcher signs in, syncs a new empty account, handles conflicts, and edits
     win.eval(await source('progress.js'));
     win.eval(await source('account.js'));
     await (win as any).STKAccount.ready;
+    assert.equal(win.document.querySelector('#profile-form'), null);
+    assert.equal(win.document.querySelector('#display-name'), null);
     const connect = win.document.querySelector('#connect-wallet') as any;
     // Event dispatch does not await an async handler. Observe its final DOM state.
     async function settled(action: () => void) {
@@ -101,6 +100,7 @@ test('launcher signs in, syncs a new empty account, handles conflicts, and edits
     const payload = (win as any).STKProgress.payload(xml('First save'));
     assert.equal((await rpc('save', { playerId: id, payload })).synced, true);
     assert.equal((await db.query('SELECT revision FROM cloud_saves WHERE player_id = $1', [id])).rows[0].revision, 1);
+    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'First save');
     const newer = (win as any).STKProgress.payload(xml('Other device'));
     await writeSave(db, id, { baseRevision: 1, payload: newer });
     assert.equal((await rpc('save', { playerId: id, payload: (win as any).STKProgress.payload(xml('Local edits')) })).synced, false);
@@ -119,39 +119,12 @@ test('launcher signs in, syncs a new empty account, handles conflicts, and edits
     assert.equal((await rpc('restore', { playerId: id, local: localOnly })).sync, false);
     assert.equal((await rpc('save', { playerId: id, payload: localOnly })).synced, false);
     assert.equal((await db.query('SELECT revision FROM cloud_saves WHERE player_id = $1', [id])).rows[0].revision, 3);
-    const input = win.document.querySelector('#display-name') as any;
-    const saveButton = win.document.querySelector('#save-profile') as any;
-    const feedback = win.document.querySelector('#profile-feedback')!;
-    input.value = 'Updated Racer'; input.dispatchEvent(new win.Event('input'));
-    assert.equal(saveButton.disabled, false);
-    assert.match(feedback.textContent, /unsaved changes/);
-    let releaseSave!: () => void;
-    profileGate = new Promise<void>(resolve => { releaseSave = resolve; });
-    const saving = settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
-    assert.equal(saveButton.textContent, 'Saving…');
-    assert.equal(saveButton.disabled, true);
-    assert.equal(win.document.querySelector('#profile-form')!.getAttribute('aria-busy'), 'true');
-    assert.equal(input.value, 'Updated Racer');
-    releaseSave(); await saving; profileGate = null;
-    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Updated Racer');
-    assert.equal(saveButton.textContent, 'Saved');
-    assert.equal(saveButton.disabled, true);
-    assert.equal(feedback.getAttribute('data-state'), 'success');
-    assert.match(feedback.textContent, /Profile saved as “Updated Racer”/);
-    assert.equal(win.document.querySelector('#profile-form')!.getAttribute('aria-busy'), 'false');
-    input.value = 'Retry Racer'; input.dispatchEvent(new win.Event('input'));
-    failProfile = true;
-    await settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
-    assert.equal(input.value, 'Retry Racer');
-    assert.equal(feedback.getAttribute('data-state'), 'error');
-    assert.match(feedback.textContent, /changes are still here/);
-    assert.equal(saveButton.textContent, 'Try again');
-    assert.equal(saveButton.disabled, false);
-    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Updated Racer');
-    failProfile = false;
-    await settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
-    assert.equal(saveButton.textContent, 'Saved');
-    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Retry Racer');
+    dialog.showModal = () => queueMicrotask(() => { dialog.returnValue = 'local'; dialog.dispatchEvent(new win.Event('close')); });
+    const gameProfile = (win as any).STKProgress.payload('<players><current player="Selected Racer"/><player name="Other Racer"/><player name="Selected Racer"/></players>');
+    await rpc('restore', { playerId: id, local: gameProfile });
+    const savedName = await rpc('save', { playerId: id, payload: gameProfile });
+    assert.equal(savedName.displayName, 'Selected Racer');
+    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Selected Racer');
     // Wallet events are also subscribed after a restored session, not only after connection.
     for (const fn of handlers.accountsChanged) await fn([]);
     assert.equal(win.document.querySelector('#account')!.getAttribute('data-player'), 'guest');
@@ -169,7 +142,7 @@ test('game bridge restores only the player file into an isolated namespace befor
     let result: any;
     if (data.action === 'bootstrap') result = { player: { id, displayName: 'Account' }, importGuest: true, items: [{ item_id: 'kart.cosmetic' }] };
     if (data.action === 'restore') result = { payload: data.local, sync: true };
-    if (data.action === 'save') result = { synced: true };
+    if (data.action === 'save') result = { synced: true, displayName: 'Guest' };
     queueMicrotask(() => win.dispatchEvent(new win.MessageEvent('message', { origin, source: parent as any, data: { source: 'stk-cloud-response', id: data.id, result } })));
   } };
   try {
@@ -192,6 +165,7 @@ test('game bridge restores only the player file into an isolated namespace befor
     assert.equal((win as any).Module.platformIdentity.id, id);
     assert.equal(Object.keys(files).some(p => p.endsWith('config.xml')), false);
     await (win as any).Module.syncSaves();
+    assert.equal((win as any).Module.platformIdentity.displayName, 'Guest');
     (win as any).Module.disposeBrowserHooks();
   } finally { await win.happyDOM.close(); }
 });

@@ -12,6 +12,16 @@
   window.STKProgress = {
     sanitize,
     payload(playersXml) { return { schemaVersion: 1, playersXml: sanitize(playersXml) }; },
+    playerName(payload) {
+      if (!payload) return null;
+      const root = new DOMParser().parseFromString(sanitize(payload.playersXml), 'application/xml').documentElement;
+      const children = Array.from(root.children);
+      const profiles = children.filter(node => node.tagName === 'player' && !['true', '1'].includes(node.getAttribute('guest')));
+      const current = children.find(node => node.tagName === 'current')?.getAttribute('player');
+      const selected = current ? profiles.find(node => node.getAttribute('name') === current) : profiles.length === 1 ? profiles[0] : null;
+      const name = selected?.getAttribute('name')?.trim();
+      return name && name.length <= 40 && !/[\u0000-\u001f\u007f]/.test(name) ? name : null;
+    },
     validate(value) {
       if (!value || value.schemaVersion !== 1 || Object.keys(value).some(k => !['schemaVersion', 'playersXml'].includes(k))) throw new Error('Unsupported cloud save.');
       return { schemaVersion: 1, playersXml: sanitize(value.playersXml) };

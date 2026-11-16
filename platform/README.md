@@ -33,6 +33,12 @@ does not prevent local guest startup. It does not provide cloud accounts.
 ## Behavior
 
 - Players can race without a wallet. Guest files remain local to the browser.
+- Wallet connection only signs the player in. After pressing Play, use the game's
+  existing player-profile screen to create, choose, or rename a player. There is
+  no name form or Save profile button on the launcher. Cloud progress saves also
+  update the account name from the selected native player, in the same transaction.
+  A single saved profile is used when no selection is recorded; multiple profiles
+  without a selection do not arbitrarily rename the account. Guest names stay local.
 - An injected desktop EVM wallet signs a server-created ERC-4361 message for
   OP Sepolia (`11155420`). Sign-in is off-chain and needs no gas. The first slice
   supports EOA signatures; WalletConnect and contract-wallet signatures are not supported.
