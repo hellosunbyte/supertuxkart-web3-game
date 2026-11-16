@@ -17,7 +17,7 @@ export function buildApp(db: Database, options: { origin: string; gameDir?: stri
   type Context = { request: Request; token?: string; setCookie?: string; identity: (registered?: boolean) => Promise<Identity>; body: () => Promise<unknown> };
   const routes = new Map<string, (ctx: Context) => Promise<unknown>>();
   const route = (method: string, path: string, fn: (ctx: Context) => Promise<unknown>) => routes.set(`${method} ${path}`, fn);
-  route('GET', '/api/config', async () => ({ chainId: CHAIN_ID, chain: CHAIN, wallets: ['injected-eoa'], recovery: 'pending' }));
+  route('GET', '/api/config', async () => ({ chainId: CHAIN_ID, chain: CHAIN, wallets: ['injected-eoa'], recovery: 'disabled' }));
   route('GET', '/api/session', async ctx => {
     const player = await session(db, ctx.token);
     if (!player) return { player: null };

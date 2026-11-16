@@ -15,7 +15,8 @@ milestone gets its own commit. No contracts or production deployment are include
   records are indexed separately; reconnecting a wallet does not move blockchain
   assets held by the previous address or recover its private key.
 - A replacement wallet must prove ownership before it can access an existing account.
-  Recovery method is awaiting the user's answer (recovery codes / verified email / both).
+  Wallet-loss recovery is deferred beyond Phase 02 at the user's request.
+  Signed-in wallet linking remains available; no recovery codes or email recovery are included.
 - Initial wallet support: injected desktop EVM wallets with EOA message signatures.
   WalletConnect/mobile and contract-wallet verification are outside this first slice.
 
@@ -25,7 +26,7 @@ milestone gets its own commit. No contracts or production deployment are include
 | --- | --- | --- |
 | 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | Complete: migrations apply and reapply in PGlite; TypeScript passes. |
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
-| 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Cloud API complete; recovery awaiting decision. Stale/concurrent saves and client inventory grants are rejected. |
+| 3. Cloud saves | Revision-controlled saves and ownership checks. Preserve progress safely across sessions/devices. | Cloud API complete; stale/concurrent saves and client inventory grants are rejected. Wallet-loss recovery is deferred. |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
 | 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 16 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
 
@@ -35,7 +36,7 @@ Guest → play locally → connect wallet → sign a sign-in message (no gas) �
 create/link player → choose existing local or cloud progress when necessary →
 play → sync progress → sign in on another device → restore the cloud copy.
 
-Wallet-loss recovery must preserve the player ID, revoke old sessions/credentials,
+Any future wallet-loss recovery must preserve the player ID, revoke old sessions/credentials,
 and prove control of the new wallet plus a previously established recovery factor.
 Purchased entitlements cannot be granted from client-submitted saves.
 
@@ -70,7 +71,7 @@ first-save syncing, all three conflict choices, profile editing, credential stri
 and account namespaces. A stale tab is rejected when browser cookies switch players.
 JavaScript syntax checks and `git diff --check` also pass.
 
-Open gates: recovery proof choice; clean dependency install/lockfile; standalone
+Open gates: clean dependency install/lockfile; standalone
 PostgreSQL; Chromium/extension testing; rebuild/full native race. Chromium aborted
 during sandboxed launch. The command allowlist rejected direct `em++` compilation.
 Network access is unavailable and elevated dependency installation was rejected.

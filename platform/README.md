@@ -74,10 +74,11 @@ Relinking an address cannot transfer tokens/NFTs held directly by a lost wallet.
 Preserving game access is a separate application entitlement policy. Recoverable
 on-chain custody or a migration contract would need an explicit later design.
 
-**Wallet-loss recovery is intentionally disabled pending the user's choice of
-proof: saved one-time recovery codes, verified email, or both.** A new wallet alone
+**Wallet-loss recovery is deferred beyond Phase 02 at the user's request.**
+No recovery codes or email-recovery flow are included. A new wallet alone
 cannot claim an existing player. `/api/auth/challenge` with `purpose: recover`
-returns `recovery_method_pending`. A signed-in player can link another wallet
+returns `recovery_not_supported`; `/api/config` advertises `recovery: disabled`.
+A signed-in player can link another wallet
 with its signature; that is not a wallet-loss recovery mechanism.
 
 ## Verification

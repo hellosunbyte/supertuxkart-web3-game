@@ -107,7 +107,8 @@ test('a new wallet links to the same stable player without moving cloud progress
   assert.equal(resumed.playerId, alice.playerId);
   assert.deepEqual((await resumed.client.request('/api/progress')).data.payload, payload('Original progress'));
   assert.equal((await resumed.client.request('/api/session')).data.player.wallets.length, 2);
-  assert.equal((await resumed.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'recover' })).data.error, 'recovery_method_pending');
+  assert.equal((await resumed.client.request('/api/config')).data.recovery, 'disabled');
+  assert.equal((await resumed.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'recover' })).data.error, 'recovery_not_supported');
 });
 test('progress persists across sessions, rejects stale updates and arbitrary inventory', async () => {
   const alice = await signIn(), bob = await signIn();
