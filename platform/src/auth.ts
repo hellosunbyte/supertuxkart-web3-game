@@ -31,12 +31,15 @@ export async function guest(db: Database) {
   });
 }
 export async function challenge(db: Database, identity: Identity, origin: string, address: string, purpose: string) {
-  if (purpose === 'link' && identity.kind !== 'registered') throw new ApiError(403, 'sign_in_first');
+  if (['link', 'switch'].includes(purpose) && identity.kind !== 'registered') throw new ApiError(403, 'sign_in_first');
+  if (purpose === 'login' && identity.kind === 'registered') throw new ApiError(409, 'account_changed');
   if (purpose === 'recover') throw new ApiError(409, 'recovery_not_supported');
   let checksumAddress: string;
   try { checksumAddress = getAddress(address); } catch { throw new ApiError(400, 'invalid_wallet_address'); }
   const id = randomUUID(), expires = new Date(Date.now() + 5 * 60_000);
-  const statement = purpose === 'link' ? 'Link this wallet to your SuperTuxKart player account.' : 'Sign in to SuperTuxKart. This does not send a transaction.';
+  const statement = purpose === 'link' ? 'Link this wallet to your SuperTuxKart player account.'
+    : purpose === 'switch' ? 'Switch to the SuperTuxKart player for this wallet. Your previous player keeps their progress.'
+    : 'Sign in to SuperTuxKart. This does not send a transaction.';
   const message = `${new URL(origin).host} wants you to sign in with your Ethereum account:\n${checksumAddress}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${CHAIN_ID}\nNonce: ${randomBytes(16).toString('hex')}\nIssued At: ${new Date().toISOString()}\nExpiration Time: ${expires.toISOString()}`;
   await db.transaction(async sql => {
     await sql.query('DELETE FROM challenges WHERE session_hash = $1 OR expires_at <= now()', [identity.tokenHash]);
@@ -58,9 +61,13 @@ export async function verify(db: Database, identity: Identity, id: string, signa
     // Serialize association changes, including two sessions linking one address.
     await sql.query('SELECT pg_advisory_xact_lock(20831003)');
     const linked = (await sql.query('SELECT player_id FROM wallets WHERE address = $1', [c.address])).rows[0];
-    if (linked && linked.player_id !== identity.id && (c.purpose === 'link' || identity.kind === 'registered'))
+    if (linked && linked.player_id !== identity.id && c.purpose !== 'switch' && (c.purpose === 'link' || identity.kind === 'registered'))
       throw new ApiError(409, 'wallet_belongs_to_another_player');
-    const playerId = linked?.player_id ?? identity.id;
+    let playerId = linked?.player_id ?? identity.id;
+    if (c.purpose === 'switch' && !linked) {
+      playerId = randomUUID();
+      await sql.query("INSERT INTO players(id, kind) VALUES ($1, 'registered')", [playerId]);
+    }
     if (!linked) await sql.query('INSERT INTO wallets(address, player_id, chain_id) VALUES ($1, $2, $3)', [c.address, playerId, CHAIN_ID]);
     await sql.query("UPDATE players SET kind = 'registered' WHERE id = $1", [playerId]);
     await sql.query('DELETE FROM challenges WHERE id = $1', [id]);

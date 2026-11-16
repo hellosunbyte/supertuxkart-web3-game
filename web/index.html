@@ -13,15 +13,34 @@
   [hidden] { display: none !important; }
   button { padding: 12px 22px; margin: 8px; font: inherit; cursor: pointer; }
   #log { text-align: left; max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+  #wallet-account-dialog { width: min(560px, calc(100% - 64px)); padding: 24px; border: 1px solid #718198; border-radius: 12px; background: #17202c; color: #fff; text-align: left; }
+  #wallet-account-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+  #wallet-account-dialog h2 { margin-top: 0; }
+  #wallet-account-list { max-height: 280px; overflow: auto; display: grid; gap: 10px; }
+  .wallet-option { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid #65758d; border-radius: 6px; cursor: pointer; }
+  .wallet-option:focus-within { outline: 2px solid #8dbdff; outline-offset: 2px; }
+  .wallet-option span { font-family: ui-monospace, monospace; overflow-wrap: anywhere; min-width: 0; }
+  #wallet-account-help { color: #bdcadd; font-size: 14px; }
 </style>
 <main>
   <h1>SuperTuxKart</h1>
   <section id="account" aria-label="Player account">
     <p id="account-status" role="status">Guest play is available.</p>
     <button id="connect-wallet">Connect wallet</button>
+    <button id="switch-wallet" hidden>Switch account</button>
     <button id="sign-out" hidden>Sign out</button>
     <p>Choose or create your player profile inside the game after pressing Play.</p>
   </section>
+  <dialog id="wallet-account-dialog" aria-labelledby="wallet-account-title" aria-describedby="wallet-account-description wallet-account-help">
+    <h2 id="wallet-account-title">Choose a wallet account</h2>
+    <p id="wallet-account-description"></p>
+    <form id="wallet-account-form">
+      <div id="wallet-account-list" role="radiogroup" aria-label="Available wallet accounts"></div>
+      <p id="wallet-account-help">Only accounts shared by your wallet appear here. To use a missing account, share it with this site in your wallet’s connected-site settings, then try again.</p>
+      <button type="button" id="wallet-account-cancel">Cancel</button>
+      <button type="submit">Continue</button>
+    </form>
+  </dialog>
   <dialog id="save-conflict" aria-labelledby="conflict-title">
     <h2 id="conflict-title">Choose your progress</h2>
     <p>This device and the cloud have different progress. Choose the copy to continue with.</p>
@@ -50,6 +69,7 @@
   const session = document.getElementById('session');
   let game;
   let running = false;
+  let sessionReady = false;
   let played = false;
   let saveWarning = '';
   let fullscreenExit = Promise.resolve();
@@ -67,6 +87,7 @@
   }
   function prepareSession() {
     running = false;
+    sessionReady = false;
     window.dispatchEvent(new CustomEvent('stk-session-state', { detail: { running: false } }));
     play.disabled = true;
     fullscreen.disabled = true;
@@ -93,7 +114,8 @@
     if (type === 'loading') {
       if (!running) status.textContent = text;
     } else if (type === 'ready') {
-      play.disabled = false;
+      sessionReady = true;
+      play.disabled = STKAccount.busy;
       play.textContent = played ? 'Play again' : 'Play';
       status.textContent = saveWarning || (played ? 'Game closed. Ready to play again.' : 'Ready to race.');
     } else if (type === 'running') {
@@ -113,6 +135,7 @@
       await fullscreenExit;
       prepareSession();
     } else if (type === 'load-error') {
+      sessionReady = false;
       status.textContent = text;
       play.disabled = true;
       fullscreen.disabled = true;
@@ -122,6 +145,8 @@
     }
   });
   play.addEventListener('click', () => {
+    if (STKAccount.busy || !sessionReady) return;
+    sessionReady = false;
     play.disabled = true;
     played = true;
     running = true;
@@ -153,6 +178,9 @@
     return '';
   }
   window.addEventListener('stk-account-changed', () => { if (!running && !compatibilityError()) prepareSession(); });
+  window.addEventListener('stk-account-busy', event => {
+    play.disabled = event.detail.busy || running || !sessionReady;
+  });
   const unsupported = compatibilityError();
   if (unsupported) {
     status.textContent = unsupported;

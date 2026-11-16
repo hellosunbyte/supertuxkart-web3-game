@@ -16,7 +16,7 @@ export function appOrigin(input: string): string {
 }
 export const challengeInput = z.object({
   address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
-  chainId: z.literal(CHAIN_ID), purpose: z.enum(['login', 'link', 'recover']).default('login'),
+  chainId: z.literal(CHAIN_ID), purpose: z.enum(['login', 'link', 'switch', 'recover']).default('login'),
 }).strict();
 export const verifyInput = z.object({
   id: z.uuid(), signature: z.string().regex(/^0x[0-9a-fA-F]{130}$/),

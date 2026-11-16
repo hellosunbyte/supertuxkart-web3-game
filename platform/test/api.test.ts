@@ -40,7 +40,7 @@ const payload = (name = 'Test racer') => ({ schemaVersion: 1, playersXml: `<play
 
 test('migrations can run twice without losing records', async () => {
   await migrate(db);
-  assert.equal((await db.query('SELECT name FROM schema_migrations')).rows.length, 1);
+  assert.equal((await db.query('SELECT name FROM schema_migrations')).rows.length, 2);
 });
 test('guest upgrades in place, rotates cookie, and sessions are hashed', async () => {
   const client = browser();
@@ -88,6 +88,38 @@ test('second device resumes same player; linking cannot steal another wallet', a
   const c = (await alice.client.request('/api/auth/challenge', 'POST', { address: bob.wallet.address, chainId: 11155420, purpose: 'link' })).data;
   assert.equal((await alice.client.request('/api/auth/verify', 'POST', { id: c.id, signature: await bob.wallet.signMessage(c.message) })).status, 409);
   assert.equal((await alice.client.request('/api/session')).data.player.id, alice.playerId);
+});
+test('switching accounts restores an existing player and creates a separate player for a new wallet', async () => {
+  const alice = await signIn(), bob = await signIn();
+  await alice.client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Alice progress') });
+  await bob.client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Bob progress') });
+  const oldCookie = alice.client.cookie;
+  const c = (await alice.client.request('/api/auth/challenge', 'POST', { address: bob.wallet.address, chainId: 11155420, purpose: 'switch' })).data;
+  assert.match(c.message, /Switch to the SuperTuxKart player/);
+  const switched = await alice.client.request('/api/auth/verify', 'POST', { id: c.id, signature: await bob.wallet.signMessage(c.message) });
+  assert.equal(switched.data.playerId, bob.playerId);
+  assert.deepEqual((await alice.client.request('/api/progress')).data.payload, payload('Bob progress'));
+  assert.equal((await alice.client.request('/api/session', 'GET', undefined, { cookie: oldCookie })).data.player, null);
+  const freshWallet = Wallet.createRandom();
+  const next = (await alice.client.request('/api/auth/challenge', 'POST', { address: freshWallet.address, chainId: 11155420, purpose: 'switch' })).data;
+  const fresh = await alice.client.request('/api/auth/verify', 'POST', { id: next.id, signature: await freshWallet.signMessage(next.message) });
+  assert.notEqual(fresh.data.playerId, alice.playerId); assert.notEqual(fresh.data.playerId, bob.playerId);
+  assert.equal((await alice.client.request('/api/progress')).data.payload, null);
+  const resumedAlice = await signIn(browser(), alice.wallet);
+  assert.equal(resumedAlice.playerId, alice.playerId);
+  assert.deepEqual((await resumedAlice.client.request('/api/progress')).data.payload, payload('Alice progress'));
+});
+test('failed account-switch proof preserves the current session and does not link the new wallet', async () => {
+  const alice = await signIn(), next = Wallet.createRandom(), wrong = Wallet.createRandom();
+  const cookie = alice.client.cookie;
+  const c = (await alice.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'switch' })).data;
+  assert.equal((await alice.client.request('/api/auth/verify', 'POST', { id: c.id, signature: await wrong.signMessage(c.message) })).status, 401);
+  assert.equal(alice.client.cookie, cookie);
+  assert.equal((await alice.client.request('/api/session')).data.player.id, alice.playerId);
+  assert.equal((await db.query('SELECT address FROM wallets WHERE address = $1', [next.address.toLowerCase()])).rows.length, 0);
+  assert.equal((await alice.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'login' })).data.error, 'account_changed');
+  const guest = browser(); await guest.request('/api/guest', 'POST');
+  assert.equal((await guest.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'switch' })).status, 403);
 });
 test('profiles are isolated; logout revokes the server session', async () => {
   const alice = await signIn(), bob = await signIn();
