@@ -24,8 +24,8 @@ milestone gets its own commit. No contracts or production deployment are include
 | Milestone | What and why | Status |
 | --- | --- | --- |
 | 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | Complete: migrations apply and reapply in PGlite; TypeScript passes. |
-| 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Pending |
-| 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Pending |
+| 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
+| 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Cloud API complete; recovery awaiting decision. Stale/concurrent saves and client inventory grants are rejected. |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Pending |
 | 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | Pending |
 
