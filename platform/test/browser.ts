@@ -98,7 +98,7 @@ try {
   assert.match(id!, /^[a-f0-9-]{36}$/);
   assert.equal(await frame.evaluate(() => (window as any).ENV.XDG_CONFIG_HOME), `/persist/accounts/${id}/config`);
   await page.fill('#display-name', 'Cloud Racer'); await page.click('#profile-form button');
-  await page.waitForFunction(() => document.getElementById('account-status')?.textContent === 'Profile saved.');
+  await page.waitForFunction(() => document.getElementById('profile-feedback')?.dataset.state === 'success');
   assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Cloud Racer');
   await writeProgress(page, 'First device');
   const cloud = (await db.query('SELECT payload FROM cloud_saves WHERE player_id = $1', [id])).rows[0].payload;

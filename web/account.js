@@ -5,18 +5,41 @@
   const logout = document.getElementById('sign-out');
   const profile = document.getElementById('profile-form');
   const name = document.getElementById('display-name');
+  const saveProfile = document.getElementById('save-profile');
+  const profileFeedback = document.getElementById('profile-feedback');
   const dialog = document.getElementById('save-conflict');
   let player = null, config = null, busy = false, playing = false;
   let importGuest = false, sync = null, provider = null, signing = false;
   let generation = 0;
+  let editingPlayerId = null, profileState = 'idle';
   const text = message => { info.textContent = message; };
+  function profileMessage(message, state) {
+    profileState = state;
+    profileFeedback.textContent = message;
+    profileFeedback.dataset.state = state;
+    profileFeedback.hidden = !message;
+  }
   function render() {
     const registered = player?.kind === 'registered';
     profile.hidden = !registered;
     logout.hidden = !registered;
     connect.textContent = registered ? 'Link another wallet' : 'Connect wallet';
-    if (registered) name.value = player.displayName;
+    // Refresh the input only when switching players. Other UI updates must not
+    // discard an edit or a failed save's draft.
+    if (registered && editingPlayerId !== player.id) {
+      editingPlayerId = player.id;
+      name.value = player.displayName;
+      profileMessage('', 'idle');
+    } else if (!registered) {
+      editingPlayerId = null;
+      profileMessage('', 'idle');
+    }
     for (const button of panel.querySelectorAll('button, input')) button.disabled = busy || playing;
+    const dirty = registered && name.value.trim() !== player.displayName;
+    saveProfile.textContent = profileState === 'saving' ? 'Saving…' : profileState === 'success' ? 'Saved' : profileState === 'error' ? 'Try again' : 'Save profile';
+    saveProfile.dataset.state = profileState;
+    saveProfile.disabled = busy || playing || !dirty;
+    profile.setAttribute('aria-busy', String(profileState === 'saving'));
     panel.dataset.player = registered ? player.id : 'guest';
   }
   async function api(path, method = 'GET', body) {
@@ -179,11 +202,32 @@
   });
   profile.addEventListener('submit', async event => {
     event.preventDefault(); if (busy || playing) return;
-    const displayName = name.value;
-    busy = true; render();
-    try { const updated = await api('profile', 'PATCH', { displayName }); player.displayName = updated.displayName; text('Profile saved.'); }
-    catch (error) { text(error.message); }
+    const displayName = name.value.trim();
+    if (!displayName) {
+      profileMessage('Enter a player name before saving.', 'error');
+      render(); name.focus(); return;
+    }
+    if (displayName === player?.displayName) return;
+    busy = true; profileMessage('Saving your profile…', 'saving'); render();
+    try {
+      const updated = await api('profile', 'PATCH', { displayName });
+      player.displayName = updated.displayName;
+      name.value = updated.displayName;
+      profileMessage(`Profile saved as “${updated.displayName}”.`, 'success');
+      text(`Signed in as ${updated.displayName}.`);
+    } catch (error) {
+      const message = error.data?.error === 'invalid_input' ? 'Use 1–40 characters for your player name.'
+        : error.status === 401 || error.status === 403 ? 'Your sign-in expired. Sign in again, then save your profile.'
+        : error.data?.error === 'account_changed' ? 'Your account changed in another tab. Reload before saving.'
+        : 'Could not save your profile. Your changes are still here. Please try again.';
+      profileMessage(message, 'error');
+    }
     finally { busy = false; render(); }
+  });
+  name.addEventListener('input', () => {
+    const dirty = player?.kind === 'registered' && name.value.trim() !== player.displayName;
+    profileMessage(dirty ? 'You have unsaved changes.' : '', 'idle');
+    render();
   });
   window.addEventListener('stk-session-state', event => { playing = event.detail.running; render(); });
 })();

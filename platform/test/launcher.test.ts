@@ -32,10 +32,16 @@ test('launcher signs in, syncs a new empty account, handles conflicts, and edits
   const bridgeWindow = new Window({ url: origin });
   const wallet = Wallet.createRandom();
   let cookie = '';
+  let profileGate: Promise<void> | null = null;
+  let failProfile = false;
   const handlers: Record<string, Function[]> = {};
   try {
     win.document.write(await source('index.html'));
     (win as any).fetch = async (path: string, options: any = {}) => {
+      if (path === '/api/profile' && options.method === 'PATCH') {
+        if (profileGate) await profileGate;
+        if (failProfile) return Response.json({ error: 'service_unavailable' }, { status: 503 });
+      }
       const response = await app.fetch(new Request(new URL(path, origin), { ...options, signal: undefined,
         headers: { ...options.headers, origin, cookie } }));
       if (response.headers.has('set-cookie')) cookie = response.headers.get('set-cookie')!.split(';')[0];
@@ -113,9 +119,39 @@ test('launcher signs in, syncs a new empty account, handles conflicts, and edits
     assert.equal((await rpc('restore', { playerId: id, local: localOnly })).sync, false);
     assert.equal((await rpc('save', { playerId: id, payload: localOnly })).synced, false);
     assert.equal((await db.query('SELECT revision FROM cloud_saves WHERE player_id = $1', [id])).rows[0].revision, 3);
-    const input = win.document.querySelector('#display-name') as any; input.value = 'Updated Racer';
-    await settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
+    const input = win.document.querySelector('#display-name') as any;
+    const saveButton = win.document.querySelector('#save-profile') as any;
+    const feedback = win.document.querySelector('#profile-feedback')!;
+    input.value = 'Updated Racer'; input.dispatchEvent(new win.Event('input'));
+    assert.equal(saveButton.disabled, false);
+    assert.match(feedback.textContent, /unsaved changes/);
+    let releaseSave!: () => void;
+    profileGate = new Promise<void>(resolve => { releaseSave = resolve; });
+    const saving = settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
+    assert.equal(saveButton.textContent, 'Saving…');
+    assert.equal(saveButton.disabled, true);
+    assert.equal(win.document.querySelector('#profile-form')!.getAttribute('aria-busy'), 'true');
+    assert.equal(input.value, 'Updated Racer');
+    releaseSave(); await saving; profileGate = null;
     assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Updated Racer');
+    assert.equal(saveButton.textContent, 'Saved');
+    assert.equal(saveButton.disabled, true);
+    assert.equal(feedback.getAttribute('data-state'), 'success');
+    assert.match(feedback.textContent, /Profile saved as “Updated Racer”/);
+    assert.equal(win.document.querySelector('#profile-form')!.getAttribute('aria-busy'), 'false');
+    input.value = 'Retry Racer'; input.dispatchEvent(new win.Event('input'));
+    failProfile = true;
+    await settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
+    assert.equal(input.value, 'Retry Racer');
+    assert.equal(feedback.getAttribute('data-state'), 'error');
+    assert.match(feedback.textContent, /changes are still here/);
+    assert.equal(saveButton.textContent, 'Try again');
+    assert.equal(saveButton.disabled, false);
+    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Updated Racer');
+    failProfile = false;
+    await settled(() => win.document.querySelector('#profile-form')!.dispatchEvent(new win.Event('submit', { cancelable: true })));
+    assert.equal(saveButton.textContent, 'Saved');
+    assert.equal((await db.query('SELECT display_name FROM players WHERE id = $1', [id])).rows[0].display_name, 'Retry Racer');
     // Wallet events are also subscribed after a restored session, not only after connection.
     for (const fn of handlers.accountsChanged) await fn([]);
     assert.equal(win.document.querySelector('#account')!.getAttribute('data-player'), 'guest');

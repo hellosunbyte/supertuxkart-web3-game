@@ -81,3 +81,12 @@ cached PGlite. Those checks are not a substitute for the open gates.
 See [platform/README.md](platform/README.md) for setup, player behavior, ownership
 boundaries, and commands to run the remaining checks. No contracts are deployed,
 no on-chain transactions have been submitted, and no purchase/indexer flow exists yet.
+
+## Profile save feedback follow-up
+
+The profile form now shows unsaved changes, a disabled “Saving…” button while a
+request is in flight, and a persistent confirmation naming the saved player.
+Errors appear beside the form with a retry action; unsuccessful requests retain
+the edited name. Account/cloud status updates no longer reset a draft or replace
+the form's confirmation. The existing DOM test covers pending requests, success,
+failure and retry against the real profile API.
