@@ -23,7 +23,7 @@ milestone gets its own commit. No contracts or production deployment are include
 
 | Milestone | What and why | Status |
 | --- | --- | --- |
-| 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | In progress |
+| 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | Complete: migrations apply and reapply in PGlite; TypeScript passes. |
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Pending |
 | 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Pending |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Pending |
@@ -51,7 +51,7 @@ a built Wasm asset pack and a real extension; do not report simulated checks as 
 
 - OP Sepolia: https://optimism.io/blog/op-testnets-are-migrating-from-op-goerli-to-op-sepolia
 - Sign-In with Ethereum: https://eips.ethereum.org/EIPS/eip-4361
-- EOA signature verification: https://viem.sh/docs/utilities/verifyMessage
+- EOA signature verification: https://docs.ethers.org/v6/api/hashing/#verifyMessage
 
 ## Evidence and handoff
 

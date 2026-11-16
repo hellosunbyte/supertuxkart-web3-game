@@ -98,3 +98,8 @@ lib/mesa
 
 # Personal learning/implementation plan; keep this local to the workspace.
 /BROWSER_PORT_GUIDE.md
+node_modules/
+.env
+.env.*
+!.env.example
+platform/test-results/
