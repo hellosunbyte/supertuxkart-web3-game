@@ -1,0 +1,62 @@
+# Phase 02 — player platform
+
+This is the review log for implementation, in dependency order. Each completed
+milestone gets its own commit. No contracts or production deployment are included.
+
+## Agreed behavior
+
+- OP Sepolia (Optimism testnet), chain ID `11155420`.
+- Guest play remains available without a wallet or backend connection.
+- PostgreSQL owns stable player IDs; wallets are linked credentials, not player IDs.
+- Profiles and game progress sync between devices. Graphics/input settings stay local.
+- Saves use revision checks: concurrent edits return a conflict; the player explicitly
+  chooses the cloud or local copy. Neither copy is silently overwritten.
+- Game purchases/entitlements belong to the player ID. Future on-chain transaction
+  records are indexed separately; reconnecting a wallet does not move blockchain
+  assets held by the previous address or recover its private key.
+- A replacement wallet must prove ownership before it can access an existing account.
+  Recovery method is awaiting the user's answer (recovery codes / verified email / both).
+- Initial wallet support: injected desktop EVM wallets with EOA message signatures.
+  WalletConnect/mobile and contract-wallet verification are outside this first slice.
+
+## Implementation order
+
+| Milestone | What and why | Status |
+| --- | --- | --- |
+| 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | In progress |
+| 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Pending |
+| 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Pending |
+| 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Pending |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | Pending |
+
+## Player flow
+
+Guest → play locally → connect wallet → sign a sign-in message (no gas) →
+create/link player → choose existing local or cloud progress when necessary →
+play → sync progress → sign in on another device → restore the cloud copy.
+
+Wallet-loss recovery must preserve the player ID, revoke old sessions/credentials,
+and prove control of the new wallet plus a previously established recovery factor.
+Purchased entitlements cannot be granted from client-submitted saves.
+
+## Verification target
+
+Test replay/expiry, wrong signatures/origins/chains, guest linking and wallet
+collisions, logout, cross-player isolation, duplicate/concurrent writes, malformed
+saves, and account/network changes. Verify browser COOP/COEP headers and guest
+operation when the API is unavailable. Native race/manual wallet acceptance needs
+a built Wasm asset pack and a real extension; do not report simulated checks as those.
+
+## References
+
+- OP Sepolia: https://optimism.io/blog/op-testnets-are-migrating-from-op-goerli-to-op-sepolia
+- Sign-In with Ethereum: https://eips.ethereum.org/EIPS/eip-4361
+- EOA signature verification: https://viem.sh/docs/utilities/verifyMessage
+
+## Evidence and handoff
+
+Implementation starts from local `dev` at `db4be4464` on
+`feat/player-platform-phase-02`. The conversation's original worktree was removed;
+the writable implementation checkout is `/tmp/supertuxkart-phase-02`.
+Docker is installed but its daemon is unavailable. Database integration tests will
+use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
