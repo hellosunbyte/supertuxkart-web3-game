@@ -1,5 +1,6 @@
 # Modify this file to change the last-modified date when you add/remove a file.
 # Browser controls are implemented in src/utils/browser_controls.cpp.
+# Player identity/inventory bridge: src/utils/browser_player.cpp.
 # This will then trigger a new cmake run automatically. 
 file(GLOB_RECURSE STK_HEADERS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "src/*.hpp")
 file(GLOB_RECURSE STK_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "src/*.cpp")

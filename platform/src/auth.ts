@@ -33,9 +33,11 @@ export async function guest(db: Database) {
 export async function challenge(db: Database, identity: Identity, origin: string, address: string, purpose: string) {
   if (purpose === 'link' && identity.kind !== 'registered') throw new ApiError(403, 'sign_in_first');
   if (purpose === 'recover') throw new ApiError(409, 'recovery_method_pending');
+  let checksumAddress: string;
+  try { checksumAddress = getAddress(address); } catch { throw new ApiError(400, 'invalid_wallet_address'); }
   const id = randomUUID(), expires = new Date(Date.now() + 5 * 60_000);
   const statement = purpose === 'link' ? 'Link this wallet to your SuperTuxKart player account.' : 'Sign in to SuperTuxKart. This does not send a transaction.';
-  const message = `${new URL(origin).host} wants you to sign in with your Ethereum account:\n${getAddress(address)}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${CHAIN_ID}\nNonce: ${randomBytes(16).toString('hex')}\nIssued At: ${new Date().toISOString()}\nExpiration Time: ${expires.toISOString()}`;
+  const message = `${new URL(origin).host} wants you to sign in with your Ethereum account:\n${checksumAddress}\n\n${statement}\n\nURI: ${origin}\nVersion: 1\nChain ID: ${CHAIN_ID}\nNonce: ${randomBytes(16).toString('hex')}\nIssued At: ${new Date().toISOString()}\nExpiration Time: ${expires.toISOString()}`;
   await db.transaction(async sql => {
     await sql.query('DELETE FROM challenges WHERE session_hash = $1 OR expires_at <= now()', [identity.tokenHash]);
     await sql.query(`INSERT INTO challenges(id, session_hash, address, purpose, message, expires_at)

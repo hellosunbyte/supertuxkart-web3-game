@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { z } from 'zod/v4';
@@ -40,6 +42,7 @@ export function buildApp(db: Database, options: { origin: string; gameDir?: stri
   });
   route('POST', '/api/logout', async ctx => {
     const current = await session(db, ctx.token);
+    if (current && ctx.request.headers.has('x-stk-player') && ctx.request.headers.get('x-stk-player') !== current.id) throw new ApiError(409, 'account_changed');
     if (current) await db.query('DELETE FROM sessions WHERE token_hash = $1', [current.tokenHash]);
     ctx.setCookie = cookie('', 0);
     return { ok: true };
@@ -77,6 +80,7 @@ export function buildApp(db: Database, options: { origin: string; gameDir?: stri
         identity: async (registered = false) => {
           const player = await session(db, token);
           if (!player) throw new ApiError(401, 'sign_in_required');
+          if (request.headers.has('x-stk-player') && request.headers.get('x-stk-player') !== player.id) throw new ApiError(409, 'account_changed');
           if (registered && player.kind !== 'registered') throw new ApiError(403, 'wallet_sign_in_required');
           return player;
         },
@@ -100,9 +104,11 @@ export function buildApp(db: Database, options: { origin: string; gameDir?: stri
       root = resolve(options.gameDir);
     }
     try {
-      const bytes = await readFile(resolve(root, path));
+      const filename = resolve(root, path);
+      const metadata = await stat(filename);
       const type = path.endsWith('.html') ? 'text/html; charset=utf-8' : path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream';
-      return new Response(request.method === 'HEAD' ? null : bytes, { headers: { 'Content-Type': type } });
+      return new Response(request.method === 'HEAD' ? null : Readable.toWeb(createReadStream(filename)) as ReadableStream<Uint8Array>,
+        { headers: { 'Content-Type': type, 'Content-Length': String(metadata.size) } });
     } catch (error: any) { if (error.code === 'ENOENT') throw new ApiError(404, 'not_found'); throw error; }
   }
   return { async fetch(request: Request, ip = 'local') {

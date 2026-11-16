@@ -148,6 +148,10 @@
   window.addEventListener('unhandledrejection', event => {
     if (!started) failInitialization(event.reason);
   });
+</script>
+<script src="progress.js"></script>
+<script src="cloud-bridge.js"></script>
+<script>
   const script = document.createElement('script');
   script.src = 'supertuxkart.js';
   script.onerror = () => failInitialization('Game script failed to download.');

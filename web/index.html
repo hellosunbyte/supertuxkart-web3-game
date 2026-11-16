@@ -16,6 +16,25 @@
 </style>
 <main>
   <h1>SuperTuxKart</h1>
+  <section id="account" aria-label="Player account">
+    <p id="account-status" role="status">Guest play is available.</p>
+    <button id="connect-wallet">Connect wallet</button>
+    <button id="sign-out" hidden>Sign out</button>
+    <form id="profile-form" hidden>
+      <label>Player name <input id="display-name" maxlength="40" required autocomplete="nickname"></label>
+      <button type="submit">Save profile</button>
+    </form>
+  </section>
+  <dialog id="save-conflict" aria-labelledby="conflict-title">
+    <h2 id="conflict-title">Choose your progress</h2>
+    <p>This device and the cloud have different progress. Choose the copy to continue with.</p>
+    <p id="cloud-save-detail"></p>
+    <form method="dialog">
+      <button value="cloud">Use cloud progress</button>
+      <button value="local">Use this device’s progress</button>
+      <button value="offline">Play locally without sync</button>
+    </form>
+  </dialog>
   <p id="status" role="status">Loading game files…</p>
   <button id="play" disabled>Play</button>
   <button id="fullscreen" disabled>Fullscreen</button>
@@ -24,6 +43,8 @@
   <p>Use Pause / Menu to resume, restart, or exit a race. Quit game is available throughout play, including fullscreen.</p>
   <details><summary>Game log</summary><pre id="log"></pre></details>
 </main>
+<script src="progress.js"></script>
+<script src="account.js"></script>
 <script>
   const status = document.getElementById('status');
   const play = document.getElementById('play');
@@ -49,6 +70,7 @@
   }
   function prepareSession() {
     running = false;
+    window.dispatchEvent(new CustomEvent('stk-session-state', { detail: { running: false } }));
     play.disabled = true;
     fullscreen.disabled = true;
     welcome.hidden = false;
@@ -106,6 +128,7 @@
     play.disabled = true;
     played = true;
     running = true;
+    window.dispatchEvent(new CustomEvent('stk-session-state', { detail: { running: true } }));
     fullscreen.disabled = false;
     welcome.hidden = true;
     game.hidden = false;
@@ -132,11 +155,12 @@
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return '';
   }
+  window.addEventListener('stk-account-changed', () => { if (!running && !compatibilityError()) prepareSession(); });
   const unsupported = compatibilityError();
   if (unsupported) {
     status.textContent = unsupported;
   } else {
-    prepareSession();
+    STKAccount.ready.then(prepareSession);
   }
 </script>
 </html>

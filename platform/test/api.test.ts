@@ -97,6 +97,18 @@ test('profiles are isolated; logout revokes the server session', async () => {
   await alice.client.request('/api/logout', 'POST');
   assert.equal((await alice.client.request('/api/profile', 'PATCH', { displayName: 'Changed' }, { cookie: oldCookie })).status, 401);
 });
+test('a new wallet links to the same stable player without moving cloud progress', async () => {
+  const alice = await signIn(), next = Wallet.createRandom();
+  await alice.client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Original progress') });
+  const c = (await alice.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'link' })).data;
+  const response = await alice.client.request('/api/auth/verify', 'POST', { id: c.id, signature: await next.signMessage(c.message) });
+  assert.equal(response.data.playerId, alice.playerId);
+  const resumed = await signIn(browser(), next);
+  assert.equal(resumed.playerId, alice.playerId);
+  assert.deepEqual((await resumed.client.request('/api/progress')).data.payload, payload('Original progress'));
+  assert.equal((await resumed.client.request('/api/session')).data.player.wallets.length, 2);
+  assert.equal((await resumed.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'recover' })).data.error, 'recovery_method_pending');
+});
 test('progress persists across sessions, rejects stale updates and arbitrary inventory', async () => {
   const alice = await signIn(), bob = await signIn();
   const first = await alice.client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload() });
@@ -114,9 +126,18 @@ test('concurrent first writes cannot both succeed', async () => {
   const result = await Promise.all([client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('One') }), client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Two') })]);
   assert.deepEqual(result.map(r => r.status).sort(), [200, 409]);
 });
+test('a stale tab cannot read or write progress after the browser switches accounts', async () => {
+  const alice = await signIn(), bob = await signIn();
+  const stale = { 'x-stk-player': alice.playerId };
+  assert.equal((await bob.client.request('/api/progress', 'PUT', { baseRevision: 0, payload: payload('Wrong account') }, stale)).status, 409);
+  assert.equal((await bob.client.request('/api/progress', 'GET', undefined, stale)).status, 409);
+  assert.equal((await bob.client.request('/api/logout', 'POST', undefined, stale)).status, 409);
+  assert.equal((await bob.client.request('/api/progress')).data.payload, null);
+  assert.equal((await bob.client.request('/api/session')).data.player.id, bob.playerId);
+});
 test('malformed saves, upstream credentials, and unauthenticated uploads are rejected', async () => {
   const { client } = await signIn();
-  for (const playersXml of ['<not-players/>', '<!DOCTYPE players><players></players>', '<players><player saved-token="secret"/></players>', '<players><player saved-user="123"/></players>']) {
+  for (const playersXml of ['<not-players/>', '<players><broken></players>', '<!DOCTYPE players><players></players>', '<players><player saved-token="secret"/></players>', '<players><player saved-user="123"/></players>']) {
     assert.equal((await client.request('/api/progress', 'PUT', { baseRevision: 0, payload: { schemaVersion: 1, playersXml } })).status, 400);
   }
   assert.equal((await browser().request('/api/progress', 'PUT', { baseRevision: 0, payload: payload() })).status, 401);

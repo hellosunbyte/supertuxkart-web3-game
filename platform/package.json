@@ -2,17 +2,18 @@
   "name": "stk-player-platform",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.19.0" },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
-    "migrate": "tsx src/migrate.ts",
+    "dev": "node --env-file-if-exists=.env --watch --import tsx src/main.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/main.ts",
+    "migrate": "node --env-file-if-exists=.env --import tsx src/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts",
-    "test:browser": "tsx test/browser.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:browser": "node --import tsx test/browser.ts"
   },
   "dependencies": {
     "ethers": "^6.15.0",
+    "fast-xml-parser": "^5.11.1",
     "pg": "^8.16.3",
     "zod": "^4.1.12"
   },
@@ -21,6 +22,7 @@
     "@types/node": "^22.19.0",
     "@types/pg": "^8.15.5",
     "playwright": "^1.56.1",
+    "happy-dom": "^21.0.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

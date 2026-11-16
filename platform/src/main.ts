@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { Readable } from 'node:stream';
 import { resolve } from 'node:path';
 import { buildApp } from './app.js';
 import { postgres } from './db.js';
@@ -22,7 +23,8 @@ const server = createServer(async (req, res) => {
     const response = await app.fetch(new Request(url, { method: req.method, headers,
       body: ['GET', 'HEAD'].includes(req.method ?? 'GET') ? undefined : Buffer.concat(chunks) }), req.socket.remoteAddress);
     res.writeHead(response.status, Object.fromEntries(response.headers));
-    res.end(Buffer.from(await response.arrayBuffer()));
+    if (!response.body) res.end();
+    else Readable.fromWeb(response.body as any).on('error', error => res.destroy(error)).pipe(res);
   } catch (error) { console.error(error); if (!res.headersSent) res.writeHead(500); res.end(); }
 });
 server.requestTimeout = 30_000;

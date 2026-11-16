@@ -10,8 +10,10 @@ Module['preRun'].push(function () {
     // Restoration and writes share a queue, so hiding/quitting the page cannot
     // start another filesystem sync while the initial read is pending.
     let saveQueue = new Promise(function (resolve) {
-        FS.syncfs(true, function (error) {
+        FS.syncfs(true, async function (error) {
             if (error) console.warn('Saved data could not be restored:', error);
+            try { await Module['restoreCloudProgress']?.(FS, ENV); }
+            catch (cloudError) { console.warn('Cloud progress could not be restored:', cloudError); }
             removeRunDependency('restore-saves');
             resolve();
         });
@@ -21,7 +23,11 @@ Module['preRun'].push(function () {
             return new Promise(function (resolve, reject) {
                 FS.syncfs(false, function (error) {
                     if (error) reject(error);
-                    else resolve();
+                    else {
+                        Promise.resolve(Module['uploadCloudProgress']?.(FS, ENV))
+                            .catch(function (cloudError) { console.warn('Cloud sync unavailable:', cloudError); })
+                            .then(resolve);
+                    }
                 });
             });
         });

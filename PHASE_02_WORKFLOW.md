@@ -26,8 +26,8 @@ milestone gets its own commit. No contracts or production deployment are include
 | 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | Complete: migrations apply and reapply in PGlite; TypeScript passes. |
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
 | 3. Cloud saves and recovery | Revision-controlled saves, ownership checks, recovery once its proof method is settled. Preserve progress safely across sessions/devices. | Cloud API complete; recovery awaiting decision. Stale/concurrent saves and client inventory grants are rejected. |
-| 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Pending |
-| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | Pending |
+| 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 16 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
 
 ## Player flow
 
@@ -60,3 +60,19 @@ Implementation starts from local `dev` at `db4be4464` on
 the writable implementation checkout is `/tmp/supertuxkart-phase-02`.
 Docker is installed but its daemon is unavailable. Database integration tests will
 use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
+
+Verification so far: `npm run typecheck` and `npm test` pass (16 tests). SQL tests
+exercise real migrations, transactions and wallet signatures. DOM checks exercise
+first-save syncing, all three conflict choices, profile editing, credential stripping
+and account namespaces. A stale tab is rejected when browser cookies switch players.
+
+Open gates: recovery proof choice; clean dependency install/lockfile; standalone
+PostgreSQL; Chromium/extension testing; rebuild/full native race. Chromium aborted
+during sandboxed launch. The command allowlist rejected direct `em++` compilation.
+Network access is unavailable and elevated dependency installation was rejected.
+Verification uses local installed packages (including Zod's v4 entrypoint) and
+cached PGlite. Those checks are not a substitute for the open gates.
+
+See [platform/README.md](platform/README.md) for setup, player behavior, ownership
+boundaries, and commands to run the remaining checks. No contracts are deployed,
+no on-chain transactions have been submitted, and no purchase/indexer flow exists yet.
