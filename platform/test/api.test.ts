@@ -137,10 +137,11 @@ test('a stale tab cannot read or write progress after the browser switches accou
 });
 test('malformed saves, upstream credentials, and unauthenticated uploads are rejected', async () => {
   const { client } = await signIn();
-  for (const playersXml of ['<not-players/>', '<players><broken></players>', '<!DOCTYPE players><players></players>', '<players><player saved-token="secret"/></players>', '<players><player saved-user="123"/></players>']) {
+  for (const playersXml of ['<not-players/>', '<players/><other/>', '<players/><players/>', '<players><broken></players>', '<!DOCTYPE players><players></players>', '<players><player saved-token="secret"/></players>', '<players><player saved-user="123"/></players>']) {
     assert.equal((await client.request('/api/progress', 'PUT', { baseRevision: 0, payload: { schemaVersion: 1, playersXml } })).status, 400);
   }
   assert.equal((await browser().request('/api/progress', 'PUT', { baseRevision: 0, payload: payload() })).status, 401);
+  assert.equal((await client.request('/api/progress', 'PUT', { baseRevision: 0, payload: { schemaVersion: 1, playersXml: '<players/>' } })).status, 200);
 });
 test('foreign origins/hosts, oversized bodies, and private files are rejected', async () => {
   assert.equal((await browser().request('/api/guest', 'POST', {}, { origin: 'https://attacker.example' })).status, 403);

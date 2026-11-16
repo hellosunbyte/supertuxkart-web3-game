@@ -58,6 +58,9 @@ a built Wasm asset pack and a real extension; do not report simulated checks as 
 Implementation starts from local `dev` at `db4be4464` on
 `feat/player-platform-phase-02`. The conversation's original worktree was removed;
 the writable implementation checkout is `/tmp/supertuxkart-phase-02`.
+The managed worktree repair tool also could not resolve the removed original path.
+All milestone commits remain in the isolated checkout; a portable Git bundle is
+provided beside it as `supertuxkart-phase-02.bundle` for importing the branch.
 Docker is installed but its daemon is unavailable. Database integration tests will
 use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
 
@@ -65,6 +68,7 @@ Verification so far: `npm run typecheck` and `npm test` pass (16 tests). SQL tes
 exercise real migrations, transactions and wallet signatures. DOM checks exercise
 first-save syncing, all three conflict choices, profile editing, credential stripping
 and account namespaces. A stale tab is rejected when browser cookies switch players.
+JavaScript syntax checks and `git diff --check` also pass.
 
 Open gates: recovery proof choice; clean dependency install/lockfile; standalone
 PostgreSQL; Chromium/extension testing; rebuild/full native race. Chromium aborted
