@@ -45,18 +45,6 @@ does not prevent local guest startup. It does not provide cloud accounts.
 - First sign-in upgrades a backend guest to a stable UUID. A known wallet restores
   its existing player. Linking a wallet already attached elsewhere is rejected;
   accounts and progress are not silently merged.
-- **Connect wallet** requests account permissions again, including after sign-out.
-  **Switch account** signs in to the selected wallet's player, creating a separate
-  player if that wallet is new. **Link another wallet** adds a credential to the
-  current player. Switching does not import the old player's local/guest progress.
-  The current session changes only after successful signature verification.
-- Switching and linking show an account chooser. Connecting also shows it when
-  several addresses are shared, or the wallet cannot reopen its permission picker.
-  Only wallet-authorized addresses can be listed; share a missing account through
-  the wallet's connected-site settings. Cancellation leaves the current player
-  unchanged. The app signs the explicitly chosen address, even when it is not the
-  first address returned by the wallet. A wallet already linked to this player is
-  identified clearly; a wallet owned by another player requires Switch account.
 - A browser session is a random token in an HttpOnly/SameSite cookie, stored only
   as a SHA-256 hash server-side. Challenges expire after five minutes and sessions
   after seven days. Authentication rotates the token; logout revokes it.
@@ -123,17 +111,3 @@ deployment or contract transaction has been performed.
 The initial rate limiter is in-process and intended for one backend instance.
 Before multi-instance deployment, use shared throttling, tune limits for shared
 networks, add session/guest-retention cleanup, and verify database backup/restore.
-
-## Updating an existing Phase 02 installation
-
-The wallet-account chooser update adds migration `002_wallet_account_switch.sql`.
-After applying the branch, stop the running server, then from `platform/` run:
-
-```sh
-npm run migrate
-npm start
-```
-
-Refresh the browser. This update changes the launcher and backend; no Wasm
-rebuild or database reset is needed. Verify the chooser with your real wallet
-extension; automated DOM tests simulate its provider and do not verify extension UI.

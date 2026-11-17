@@ -28,7 +28,7 @@ milestone gets its own commit. No contracts or production deployment are include
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
 | 3. Cloud saves | Revision-controlled saves and ownership checks. Preserve progress safely across sessions/devices. | Cloud API complete; stale/concurrent saves and client inventory grants are rejected. Wallet-loss recovery is deferred. |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
-| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 22 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 17 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
 
 ## Player flow
 
@@ -65,7 +65,7 @@ provided beside it as `supertuxkart-phase-02.bundle` for importing the branch.
 Docker is installed but its daemon is unavailable. Database integration tests will
 use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
 
-Verification so far: `npm run typecheck` and `npm test` pass (22 tests). SQL tests
+Verification so far: `npm run typecheck` and `npm test` pass (17 tests). SQL tests
 exercise real migrations, transactions and wallet signatures. DOM checks exercise
 first-save syncing, all three conflict choices, in-game profile naming, credential stripping
 and account namespaces. A stale tab is rejected when browser cookies switch players.
@@ -92,22 +92,3 @@ before a current-player selection exists; ambiguous or guest profiles do not
 overwrite the account name. Tests cover multiple profiles, XML-escaped names,
 cloud conflicts, and the launcher flow without a name form. Existing launcher-only
 names are reconciled with the native profile on the next successful sync.
-
-## Wallet account selection
-
-Connect always re-requests wallet account permissions so signing out does not
-silently reuse the old account. Switch account and Link another wallet are separate
-actions with an explicit chooser and distinct sign-in messages. Switching restores
-another player (or creates a new one); linking preserves the current player.
-Unsupported permission methods fall back to a list of already shared addresses
-with instructions for sharing missing ones. No account is chosen silently when
-several are available. A valid signature is required before a switch changes the
-session; cancelling does not discard the current session. Play is blocked while
-account selection is in progress.
-
-Migration `002_wallet_account_switch.sql` enables the new challenge purpose. Run
-`npm run migrate`, restart the backend, then refresh. No native rebuild is needed.
-Tests cover reconnecting, choosing a non-first address, linking, switching to known
-and new players, progress isolation, cancellation, rejected signatures and permission
-requests, and unsupported wallet methods. Actual extension-popup verification
-remains a manual acceptance check.
