@@ -122,10 +122,12 @@ build, with real EOA signatures. DOM tests exercise actual launcher and game glu
 The Chromium suite uses simulated Wasm filesystem callbacks with the actual API;
 it does not substitute for a rebuilt native race or a real wallet extension.
 
-This workspace cannot download dependencies or launch Chromium, and Docker's
-daemon is unavailable. Local verification uses existing installed libraries and
-cached PGlite. A clean registry install/lockfile, standalone PostgreSQL, real
-Chromium, rebuilt Wasm, and extension-wallet checks remain handoff gates. No live
+The agent's sandbox could not download dependencies, launch Chromium, or run the
+Docker daemon. Automated checks use PGlite and local dependencies. The user
+confirmed clean installation/standalone PostgreSQL, real wallet/browser use,
+native gameplay and cross-device restoration on 2026-11-17 and accepted Phase 02.
+Those are user-confirmed checks, separate from the agent's automated results.
+The platform lockfile is included for reproducible installs. No live production
 deployment or contract transaction has been performed.
 
 The initial rate limiter is in-process and intended for one backend instance.

@@ -1,6 +1,6 @@
 # Phase 02 — player platform
 
-**Status: Implementation complete; manual acceptance pending (2026-11-17).**
+**Status: Done — accepted by the user on 2026-11-17.**
 
 This is the review log for implementation, in dependency order. Each completed
 milestone gets its own commit. No contracts or production deployment are included.
@@ -29,8 +29,8 @@ milestone gets its own commit. No contracts or production deployment are include
 | 1. Plan and schema | Record decisions; add typed backend, PostgreSQL migrations, local setup. Establish stable identities before wallet integration. | Complete: migrations apply and reapply in PGlite; TypeScript passes. |
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
 | 3. Cloud saves | Revision-controlled saves and ownership checks. Preserve progress safely across sessions/devices. | Cloud API complete; stale/concurrent saves and client inventory grants are rejected. Wallet-loss recovery is deferred. |
-| 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
-| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 31 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
+| 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Complete; DOM checks pass and the user confirmed browser/native acceptance on 2026-11-17. |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | Complete; 31 API/DOM tests and typecheck pass, setup/runbook written, and manual acceptance confirmed by the user. |
 
 ## Player flow
 
@@ -64,8 +64,8 @@ the writable implementation checkout is `/tmp/supertuxkart-phase-02`.
 The managed worktree repair tool also could not resolve the removed original path.
 All milestone commits remain in the isolated checkout; a portable Git bundle is
 provided beside it as `supertuxkart-phase-02.bundle` for importing the branch.
-Docker is installed but its daemon is unavailable. Database integration tests will
-use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
+Agent-run database integration tests use embedded PostgreSQL (PGlite);
+production uses PostgreSQL via `pg`.
 
 Verification so far: `npm run typecheck` and `npm test` pass (31 tests). SQL tests
 exercise real migrations, transactions and wallet signatures. DOM checks exercise
@@ -73,15 +73,19 @@ first-save syncing, all three conflict choices, in-game profile naming, credenti
 and account namespaces. A stale tab is rejected when browser cookies switch players.
 JavaScript syntax checks and `git diff --check` also pass.
 
-Open gates: clean dependency install/lockfile; standalone
-PostgreSQL; Chromium/extension testing; rebuild/full native race. Chromium aborted
-during sandboxed launch. The command allowlist rejected direct `em++` compilation.
-Network access is unavailable and elevated dependency installation was rejected.
-Verification uses local installed packages (including Zod's v4 entrypoint) and
-cached PGlite. Those checks are not a substitute for the open gates.
+The user confirmed the work and explicitly requested the remaining acceptance
+items be checked on 2026-11-17: clean installation/standalone PostgreSQL, real
+wallets with the threaded browser runtime, native gameplay and cross-device
+progress restoration. Phase 02 is closed on that user acceptance. The platform
+dependency lockfile from the user's installation is included in the branch.
+
+Agent verification limits remain part of the evidence: Chromium aborted during
+sandboxed launch; the command allowlist rejected direct `em++` compilation;
+network access and elevated dependency installation were unavailable. The agent
+does not claim to have independently run the user-confirmed manual checks.
 
 See [platform/README.md](platform/README.md) for setup, player behavior, ownership
-boundaries, and commands to run the remaining checks. No contracts are deployed,
+boundaries, and commands to reproduce the checks. No contracts are deployed,
 no on-chain transactions have been submitted, and no purchase/indexer flow exists yet.
 
 ## In-game player naming
