@@ -98,3 +98,6 @@ set_property(TARGET supertuxkart APPEND PROPERTY LINK_DEPENDS
     "${PROJECT_SOURCE_DIR}/web/pre.js")
 configure_file(web/index.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/index.html" COPYONLY)
 configure_file(web/game.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/game.html" COPYONLY)
+foreach(WEB_SCRIPT account.js wallets.js progress.js cloud-bridge.js)
+    configure_file("web/${WEB_SCRIPT}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${WEB_SCRIPT}" COPYONLY)
+endforeach()

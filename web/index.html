@@ -13,9 +13,52 @@
   [hidden] { display: none !important; }
   button { padding: 12px 22px; margin: 8px; font: inherit; cursor: pointer; }
   #log { text-align: left; max-height: 140px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+  .wallet-dialog { box-sizing: border-box; width: min(580px, calc(100% - 32px)); padding: 24px; border: 1px solid #718198; border-radius: 12px; background: #17202c; color: #fff; text-align: left; }
+  .wallet-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+  .wallet-dialog h2 { margin-top: 0; }
+  #wallet-list, #wallet-account-list { display: grid; gap: 12px; max-height: 320px; overflow: auto; padding: 4px; }
+  .wallet-option { display: grid; gap: 6px; width: 100%; box-sizing: border-box; margin: 0; padding: 16px; border: 1px solid #718198; border-radius: 8px; background: #243247; color: #fff; text-align: left; }
+  .wallet-option span { font-size: 14px; color: #c3d2e5; }
+  .wallet-option:disabled { opacity: .65; cursor: not-allowed; }
+  .wallet-option:focus-visible, .wallet-account-option:focus-within { outline: 2px solid #8dbdff; outline-offset: 2px; }
+  .wallet-account-option { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid #718198; border-radius: 8px; cursor: pointer; }
+  .wallet-account-option span { min-width: 0; overflow-wrap: anywhere; font: 14px ui-monospace, monospace; }
 </style>
 <main>
   <h1>SuperTuxKart</h1>
+  <section id="account" aria-label="Player account">
+    <p id="account-status" role="status">Guest play is available.</p>
+    <button id="connect-wallet">Connect wallet</button>
+    <button id="sign-out" hidden>Sign out</button>
+    <p>Choose or create your player profile inside the game after pressing Play.</p>
+  </section>
+  <dialog id="wallet-picker" class="wallet-dialog" aria-labelledby="wallet-picker-title" aria-describedby="wallet-picker-description">
+    <h2 id="wallet-picker-title">Choose your wallet</h2>
+    <p id="wallet-picker-description">Select an installed wallet to connect to OP Sepolia. Only the wallet you choose will open.</p>
+    <div id="wallet-list" aria-label="Installed wallets"></div>
+    <p id="wallet-empty" hidden>No wallet found. Enable or unlock your wallet extension for this site, then refresh the list.</p>
+    <button type="button" id="wallet-refresh">Refresh list</button>
+    <button type="button" id="wallet-cancel">Cancel</button>
+  </dialog>
+  <dialog id="wallet-account-picker" class="wallet-dialog" aria-labelledby="wallet-account-title" aria-describedby="wallet-account-help">
+    <h2 id="wallet-account-title">Choose an account</h2>
+    <form id="wallet-account-form">
+      <div id="wallet-account-list" role="radiogroup" aria-label="Accounts shared by the selected wallet"></div>
+      <p id="wallet-account-help">Only accounts shared by this wallet appear here. To use a missing account, share it with this site in the wallet’s connected-site settings, then try again.</p>
+      <button type="button" id="wallet-account-cancel">Cancel</button>
+      <button type="submit">Continue</button>
+    </form>
+  </dialog>
+  <dialog id="save-conflict" aria-labelledby="conflict-title">
+    <h2 id="conflict-title">Choose your progress</h2>
+    <p>This device and the cloud have different progress. Choose the copy to continue with.</p>
+    <p id="cloud-save-detail"></p>
+    <form method="dialog">
+      <button value="cloud">Use cloud progress</button>
+      <button value="local">Use this device’s progress</button>
+      <button value="offline">Play locally without sync</button>
+    </form>
+  </dialog>
   <p id="status" role="status">Loading game files…</p>
   <button id="play" disabled>Play</button>
   <button id="fullscreen" disabled>Fullscreen</button>
@@ -24,6 +67,9 @@
   <p>Use Pause / Menu to resume, restart, or exit a race. Quit game is available throughout play, including fullscreen.</p>
   <details><summary>Game log</summary><pre id="log"></pre></details>
 </main>
+<script src="progress.js"></script>
+<script src="wallets.js"></script>
+<script src="account.js"></script>
 <script>
   const status = document.getElementById('status');
   const play = document.getElementById('play');
@@ -32,6 +78,7 @@
   const session = document.getElementById('session');
   let game;
   let running = false;
+  let sessionReady = false;
   let played = false;
   let saveWarning = '';
   let fullscreenExit = Promise.resolve();
@@ -49,6 +96,8 @@
   }
   function prepareSession() {
     running = false;
+    sessionReady = false;
+    window.dispatchEvent(new CustomEvent('stk-session-state', { detail: { running: false } }));
     play.disabled = true;
     fullscreen.disabled = true;
     welcome.hidden = false;
@@ -74,7 +123,8 @@
     if (type === 'loading') {
       if (!running) status.textContent = text;
     } else if (type === 'ready') {
-      play.disabled = false;
+      sessionReady = true;
+      play.disabled = running || STKAccount.busy;
       play.textContent = played ? 'Play again' : 'Play';
       status.textContent = saveWarning || (played ? 'Game closed. Ready to play again.' : 'Ready to race.');
     } else if (type === 'running') {
@@ -94,6 +144,7 @@
       await fullscreenExit;
       prepareSession();
     } else if (type === 'load-error') {
+      sessionReady = false;
       status.textContent = text;
       play.disabled = true;
       fullscreen.disabled = true;
@@ -103,9 +154,12 @@
     }
   });
   play.addEventListener('click', () => {
+    if (STKAccount.busy || !sessionReady) return;
+    sessionReady = false;
     play.disabled = true;
     played = true;
     running = true;
+    window.dispatchEvent(new CustomEvent('stk-session-state', { detail: { running: true } }));
     fullscreen.disabled = false;
     welcome.hidden = true;
     game.hidden = false;
@@ -132,11 +186,13 @@
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return '';
   }
+  window.addEventListener('stk-account-changed', () => { if (!running && !compatibilityError()) prepareSession(); });
+  window.addEventListener('stk-account-busy', event => { play.disabled = event.detail.busy || running || !sessionReady; });
   const unsupported = compatibilityError();
   if (unsupported) {
     status.textContent = unsupported;
   } else {
-    prepareSession();
+    STKAccount.ready.then(prepareSession);
   }
 </script>
 </html>
