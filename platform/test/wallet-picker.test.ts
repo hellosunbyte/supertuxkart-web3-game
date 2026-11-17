@@ -6,6 +6,7 @@ import { Window } from 'happy-dom';
 import { buildApp } from '../src/app.js';
 import { testDatabase } from './database.js';
 import { installDialogHooks, waitForUI, confirmAccount } from './wallet-ui.js';
+import { CHAIN } from '../src/config.js';
 const { Wallet } = createRequire(import.meta.url)('ethers/wallet') as typeof import('ethers/wallet');
 const origin = 'http://localhost:8080';
 const web = new URL('../../web/', import.meta.url);
@@ -53,8 +54,8 @@ test('EIP-6963 discovers both extensions even when Phantom owns the global; only
     const wallets = (win as any).STKWallets;
     const selecting = wallets.select();
     assert.equal(win.document.querySelectorAll('#wallet-list button').length, 2);
-    assert.equal(walletButton(win, 'Phantom').disabled, true);
-    assert.match(walletButton(win, 'Phantom').textContent, /does not support OP Sepolia/);
+    assert.equal(walletButton(win, 'Phantom').disabled, false);
+    assert.equal(walletButton(win, 'Phantom').querySelector('span').textContent, walletButton(win, 'MetaMask').querySelector('span').textContent);
     assert.deepEqual(meta.calls, []); assert.deepEqual(phantom.calls, []);
     walletButton(win, 'MetaMask').click();
     const selected = await selecting; assert.equal(selected.provider, meta);
@@ -76,7 +77,7 @@ test('legacy provider arrays and the Phantom namespace are deduplicated with Pha
     const selecting = (win as any).STKWallets.select();
     assert.equal(win.document.querySelectorAll('#wallet-list button').length, 2);
     assert.equal(walletButton(win, 'MetaMask').disabled, false);
-    assert.equal(walletButton(win, 'Phantom').disabled, true);
+    assert.equal(walletButton(win, 'Phantom').disabled, false);
     (win.document.getElementById('wallet-cancel') as any).click();
     assert.equal(await selecting, null);
     assert.deepEqual(meta.calls, []); assert.deepEqual(phantom.calls, []);
@@ -148,6 +149,70 @@ test('unsupported permission methods fall back to accounts shared by that provid
     assert.deepEqual(meta.calls, ['wallet_requestPermissions', 'eth_requestAccounts']);
   } finally { await win.happyDOM.close(); }
 });
+
+const walletVariants = [
+  { name: 'MetaMask', info: metaInfo, flags: { isMetaMask: true } },
+  { name: 'Phantom', info: phantomInfo, flags: { isMetaMask: true, isPhantom: true } },
+  { name: 'Example EVM Wallet', info: { uuid: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Example EVM Wallet', rdns: 'org.example.wallet' }, flags: {} },
+];
+for (const variant of walletVariants) {
+  test(`the same capability checks accept a compatible ${variant.name}-labelled provider`, async () => {
+    const win = await page();
+    const calls: string[] = [];
+    let chain = '0x1', added = false;
+    const selectedProvider = { ...variant.flags, async request({ method, params }: any) {
+      calls.push(method);
+      if (method === 'wallet_requestPermissions') return [{ parentCapability: 'eth_accounts' }];
+      if (method === 'eth_requestAccounts') return addresses;
+      if (method === 'eth_chainId') return chain;
+      if (method === 'wallet_addEthereumChain') { added = true; return null; }
+      if (method === 'wallet_switchEthereumChain') {
+        if (!added) throw Object.assign(new Error('Unknown network'), { code: 4902 });
+        chain = params[0].chainId; return null;
+      }
+      throw new Error('Unexpected method ' + method);
+    } };
+    try {
+      win.addEventListener('eip6963:requestProvider', () => announce(win, variant.info, selectedProvider));
+      win.eval(await source('wallets.js'));
+      const wallets = (win as any).STKWallets;
+      const picking = wallets.select();
+      assert.equal(walletButton(win, variant.name).disabled, false);
+      assert.deepEqual(calls, []);
+      walletButton(win, variant.name).click(); const selected = await picking;
+      const account = wallets.chooseAccount(selected); await confirmAccount(win, addresses[1]);
+      assert.equal(await account, addresses[1]);
+      await wallets.ensureNetwork(selected, CHAIN);
+      assert.equal(chain, CHAIN.chainId);
+      assert.equal(calls.filter(method => method === 'wallet_addEthereumChain').length, 1);
+      assert.equal(calls.filter(method => method === 'wallet_switchEthereumChain').length, 2);
+    } finally { await win.happyDOM.close(); }
+  });
+  test(`the same capability checks reject unavailable networks and preserve cancellation for ${variant.name}`, async () => {
+    const win = await page(); let errorCode = 4200;
+    const calls: string[] = [];
+    const selectedProvider = { ...variant.flags, async request({ method }: any) {
+      calls.push(method);
+      if (method === 'eth_chainId') return '0x1';
+      if (method === 'wallet_switchEthereumChain') throw Object.assign(new Error('Network request failed'), { code: errorCode });
+      throw new Error('Unexpected method ' + method);
+    } };
+    try {
+      win.addEventListener('eip6963:requestProvider', () => announce(win, variant.info, selectedProvider));
+      win.eval(await source('wallets.js'));
+      const wallets = (win as any).STKWallets;
+      const picking = wallets.select(); walletButton(win, variant.name).click(); const selected = await picking;
+      await assert.rejects(wallets.ensureNetwork(selected, CHAIN), (error: any) =>
+        error.code === 'wallet_network_unavailable' && error.message.includes('OP Sepolia') && !error.message.includes(variant.name));
+      assert.deepEqual(calls, ['eth_chainId', 'wallet_switchEthereumChain']);
+      for (const cancellation of [4001, -32002]) {
+        errorCode = cancellation; calls.length = 0;
+        await assert.rejects(wallets.ensureNetwork(selected, CHAIN), (error: any) => error.code === cancellation);
+        assert.deepEqual(calls, ['eth_chainId', 'wallet_switchEthereumChain']);
+      }
+    } finally { await win.happyDOM.close(); }
+  });
+}
 
 test('real sign-in uses the chosen extension and second address, ignores the other extension, and reselects on reconnect', async () => {
   const db = await testDatabase(), app = buildApp(db, { origin, rateMax: 10000 });

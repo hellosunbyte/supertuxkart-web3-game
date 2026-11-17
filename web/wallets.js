@@ -33,10 +33,9 @@
     const isPhantom = phantom(provider);
     const name = isPhantom ? 'Phantom' : announced ? info.name.trim().slice(0, 80)
       : old?.announced ? old.name : provider.isMetaMask === true ? 'MetaMask' : 'Browser wallet';
-    const unsupported = isPhantom ? 'Phantom does not support OP Sepolia. Choose a wallet that supports this network.' : '';
-    if (old && old.name === name && old.unsupported === unsupported && (!announced || old.announced)) return;
+    if (old && old.name === name && (!announced || old.announced)) return;
     entries.set(provider, { id: old?.id ?? 'wallet-' + ++sequence, provider, name,
-      rdns: announced ? info.rdns : old?.rdns ?? '', announced: announced || !!old?.announced, unsupported });
+      rdns: announced ? info.rdns : old?.rdns ?? '', announced: announced || !!old?.announced });
     repaint?.();
   }
   function legacy() {
@@ -52,7 +51,7 @@
   function discover() {
     window.dispatchEvent(new Event('eip6963:requestProvider'));
     legacy();
-    return Array.from(entries.values()).sort((a, b) => Number(!!a.unsupported) - Number(!!b.unsupported) || a.name.localeCompare(b.name));
+    return Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name));
   }
   window.addEventListener('eip6963:announceProvider', event => {
     const detail = event.detail;
@@ -72,7 +71,7 @@
     return new Promise((resolve, reject) => {
       const render = () => {
         list.replaceChildren();
-        const wallets = Array.from(entries.values()).sort((a, b) => Number(!!a.unsupported) - Number(!!b.unsupported) || a.name.localeCompare(b.name));
+        const wallets = Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name));
         empty.hidden = wallets.length > 0;
         for (const wallet of wallets) {
           const button = document.createElement('button');
@@ -80,8 +79,8 @@
           button.dataset.walletId = wallet.id;
           const name = document.createElement('strong'); name.textContent = wallet.name;
           const description = document.createElement('span');
-          description.textContent = wallet.unsupported || 'Choose this wallet';
-          button.append(name, description); button.disabled = !!wallet.unsupported;
+          description.textContent = 'Choose this wallet';
+          button.append(name, description);
           button.addEventListener('click', () => { selected = wallet; dialog.close('selected'); });
           list.appendChild(button);
         }
@@ -101,7 +100,7 @@
   }
   async function chooseAccount(wallet) {
     if (accountChoicePending) throw new Error('Finish choosing your account first.');
-    if (!wallet || wallet.unsupported || phantom(wallet.provider)) throw new Error(wallet?.unsupported || 'This wallet does not support OP Sepolia.');
+    if (!wallet || typeof wallet.provider?.request !== 'function') throw new Error('Choose an Ethereum-compatible wallet.');
     accountChoicePending = true;
     try { return await requestAccount(wallet); }
     finally { accountChoicePending = false; }
@@ -148,5 +147,26 @@
       try { dialog.showModal(); } catch (error) { cleanup(); reject(error); }
     });
   }
-  window.STKWallets = { discover, select, chooseAccount, errorCode: code };
+  function isNetwork(actual, expected) {
+    try { return typeof actual === 'string' && /^0x[0-9a-f]+$/i.test(actual) && BigInt(actual) === BigInt(expected); }
+    catch { return false; }
+  }
+  async function ensureNetwork(wallet, chain) {
+    const selectedProvider = wallet.provider;
+    try {
+      if (isNetwork(await selectedProvider.request({ method: 'eth_chainId' }), chain.chainId)) return;
+      try { await selectedProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chain.chainId }] }); }
+      catch (error) {
+        if (code(error) !== 4902) throw error;
+        await selectedProvider.request({ method: 'wallet_addEthereumChain', params: [chain] });
+        await selectedProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chain.chainId }] });
+      }
+      if (!isNetwork(await selectedProvider.request({ method: 'eth_chainId' }), chain.chainId)) throw new Error('Network did not change.');
+    } catch (error) {
+      // Rejection and pending requests retain their meaning for every provider.
+      if ([4001, -32002].includes(code(error))) throw error;
+      throw Object.assign(new Error('This wallet could not connect to ' + chain.chainName + '. Enable this network in the wallet or choose another wallet.'), { code: 'wallet_network_unavailable' });
+    }
+  }
+  window.STKWallets = { discover, select, chooseAccount, ensureNetwork, isNetwork, errorCode: code };
 })();

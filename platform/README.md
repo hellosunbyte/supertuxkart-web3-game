@@ -54,12 +54,14 @@ does not prevent local guest startup. It does not provide cloud accounts.
   permissions. Cancellation leaves the current player unchanged. Sign out and
   reconnect to use another player's wallet account; Link another wallet adds a
   credential to the current player and never silently merges existing players.
-- Phantom is discoverable but disabled for OP Sepolia. As of 2026-11-17, its
-  official support documentation lists Optimism as unsupported and does not list
-  OP Sepolia as a testnet. Other selected EVM wallets must pass the network check.
-  Sources: [Phantom networks](https://help.phantom.com/articles/41372840389651),
-  [Phantom testnets](https://help.phantom.com/articles/5997313271699),
-  [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963).
+- All discovered EVM wallets are selectable and use the same capability checks.
+  There is no wallet-brand allowlist or blocklist. After account selection, the
+  app checks the chain, requests OP Sepolia when needed, and offers the network
+  configuration if the wallet reports an unknown chain. It confirms the resulting
+  chain before signing. Wallets unable to use OP Sepolia receive the same network
+  error; cancellation remains cancellation and never triggers another provider.
+  Brand-specific legacy detection only labels/deduplicates providers, not their
+  eligibility. Wallet discovery standard: [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963).
 - First sign-in upgrades a backend guest to a stable UUID. A known wallet restores
   its existing player. Linking a wallet already attached elsewhere is rejected;
   accounts and progress are not silently merged.
@@ -137,9 +139,12 @@ browser. The backend must restart to serve the new `wallets.js` launcher module.
 This update needs no new dependencies, database migration, or Wasm rebuild for
 the platform server. Guest-only static builds copy the module on CMake configure.
 
-For manual acceptance, enable MetaMask and Phantom together. Connect wallet must
-show both, with Phantom's OP Sepolia limitation visible. Choosing MetaMask must
-open only MetaMask. Authorize multiple accounts and confirm a non-first address
+For manual acceptance, enable two or more EVM wallets together. Connect wallet
+must show all detected wallets as selectable, without brand-specific exclusions.
+Choosing one must open only that wallet. Authorize multiple accounts and confirm a non-first address
 on the site, then sign in. Sign out and repeat with a different account. Cancel
 each picker and the signing prompt to verify no unintended player change. The
 automated tests simulate providers; they cannot verify the real extension popup.
+For each wallet, verify either OP Sepolia connection or the same network failure
+message based on its actual responses. Network support remains required even
+though wallet brands are treated equally.

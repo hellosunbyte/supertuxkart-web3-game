@@ -28,7 +28,7 @@ milestone gets its own commit. No contracts or production deployment are include
 | 2. Authentication and profiles | Single-use, expiring, origin-bound sign-in challenges; hashed cookie sessions; guest linking; wallet lifecycle. Prevent replay and accidental account merging. | Complete: API tests cover signatures, replay, expiry, session binding, linking collisions, logout and isolation. |
 | 3. Cloud saves | Revision-controlled saves and ownership checks. Preserve progress safely across sessions/devices. | Cloud API complete; stale/concurrent saves and client inventory grants are rejected. Wallet-loss recovery is deferred. |
 | 4. Launcher and game bridge | Account panel, wallet events, conflict UI, validated progress import/export before native startup. Keep guest play intact. | Implemented; DOM checks pass. Real browser/native acceptance remains open. |
-| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 25 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
+| 5. Verification and handoff | API/database integration tests, browser integration checks, setup docs and final review. Record limits as well as passing checks. | 31 API/DOM tests and typecheck pass; setup/runbook written. Runtime gates below remain open. |
 
 ## Player flow
 
@@ -65,7 +65,7 @@ provided beside it as `supertuxkart-phase-02.bundle` for importing the branch.
 Docker is installed but its daemon is unavailable. Database integration tests will
 use embedded PostgreSQL (PGlite); production uses PostgreSQL via `pg`.
 
-Verification so far: `npm run typecheck` and `npm test` pass (25 tests). SQL tests
+Verification so far: `npm run typecheck` and `npm test` pass (31 tests). SQL tests
 exercise real migrations, transactions and wallet signatures. DOM checks exercise
 first-save syncing, all three conflict choices, in-game profile naming, credential stripping
 and account namespaces. A stale tab is rejected when browser cookies switch players.
@@ -101,8 +101,10 @@ The selected provider remains fixed through all RPC calls; the app does not
 choose the global `window.ethereum` provider. EIP-6963 discovery handles multiple
 extensions and late announcements; legacy provider arrays and Phantom's named
 provider cover older installations. Discovery itself makes no account requests.
-Phantom is shown as unavailable for OP Sepolia, per its current official network
-support. Reopening Connect wallet requests account selection again.
+Every discovered EVM wallet is selectable. Network eligibility comes from the
+selected provider's actual responses, with identical OP Sepolia checks, optional
+network addition, and error handling for all brands. Reopening Connect wallet
+requests account selection again.
 
 Tests place Phantom in `window.ethereum`, discover both extensions, select
 MetaMask's second address, and verify a real signature while asserting zero RPC
@@ -115,3 +117,17 @@ Restart the backend after applying this change so it serves the new `wallets.js`
 Then refresh and perform the real two-extension acceptance check documented in
 [platform/README.md](platform/README.md). No Wasm rebuild is needed for the
 platform server. Real extension popups remain outside the sandboxed test evidence.
+
+## Equal wallet capability checks
+
+Removed the Phantom-specific block and availability label. All wallets now follow
+the same path: select an account, read the active chain, request OP Sepolia when
+needed, add its configuration only on an unknown-chain response, confirm the
+chain, then verify account control. Wallet names/legacy flags affect discovery
+and labels only. Failures never silently fall back to another wallet.
+
+Parameterized provider tests give MetaMask, Phantom, and an unnamed EVM wallet
+identical behavior and assert equal acceptance, unknown-network handling,
+network failure, cancellation, and pending-request handling. These are simulated
+capabilities, not claims that each real extension supports OP Sepolia. No new
+dependency, schema migration, or native rebuild is needed.

@@ -148,24 +148,14 @@
       if (!address) throw Object.assign(new Error('Account selection cancelled.'), { code: 4001 });
       if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new Error('No wallet account selected.');
       if (!wasGuest && player.wallets.includes(address.toLowerCase())) throw new Error('That account is already linked to your player. Choose a different account to link.');
-      const chain = await chosenProvider.request({ method: 'eth_chainId' });
-      if (chain.toLowerCase() !== config.chain.chainId) {
-        try { await chosenProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] }); }
-        catch (error) {
-          if (error.code !== 4902) throw error;
-          await chosenProvider.request({ method: 'wallet_addEthereumChain', params: [config.chain] });
-          await chosenProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] });
-        }
-      }
-      if ((await chosenProvider.request({ method: 'eth_chainId' })).toLowerCase() !== config.chain.chainId)
-        throw new Error(wallet.name + ' could not connect to OP Sepolia. Choose a wallet that supports this network.');
+      await STKWallets.ensureNetwork(wallet, config.chain);
       if (wasGuest) await api('guest', 'POST');
       const challenge = await api('auth/challenge', 'POST', { address, chainId: config.chainId, purpose: wasGuest ? 'login' : 'link' });
       const message = '0x' + Array.from(new TextEncoder().encode(challenge.message), b => b.toString(16).padStart(2, '0')).join('');
       const signature = await chosenProvider.request({ method: 'personal_sign', params: [message, address] });
       const selected = await chosenProvider.request({ method: 'eth_accounts' });
       const selectedChain = await chosenProvider.request({ method: 'eth_chainId' });
-      if (!Array.isArray(selected) || !selected.some(value => typeof value === 'string' && value.toLowerCase() === address.toLowerCase()) || selectedChain.toLowerCase() !== config.chain.chainId) throw new Error('Wallet changed while signing. Please try again.');
+      if (!Array.isArray(selected) || !selected.some(value => typeof value === 'string' && value.toLowerCase() === address.toLowerCase()) || !STKWallets.isNetwork(selectedChain, config.chain.chainId)) throw new Error('Wallet changed while signing. Please try again.');
       await api('auth/verify', 'POST', { id: challenge.id, signature });
       verified = true;
       await refresh(); importGuest = wasGuest; changed();
