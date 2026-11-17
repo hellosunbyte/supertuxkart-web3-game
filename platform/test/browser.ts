@@ -47,6 +47,7 @@ async function device(offline = false) {
   await context.addInitScript(({ address }) => {
     const callbacks: Record<string, Function[]> = {};
     (window as any).ethereum = {
+      isMetaMask: true,
       on(event: string, fn: Function) { (callbacks[event] ??= []).push(fn); },
       removeListener(event: string, fn: Function) { callbacks[event] = (callbacks[event] ?? []).filter(f => f !== fn); },
       emit(event: string) { for (const fn of callbacks[event] ?? []) fn([]); },
@@ -77,9 +78,14 @@ async function device(offline = false) {
 }
 async function connected(page: Page) {
   await page.click('#connect-wallet');
+  await chooseWalletAndAccount(page);
   await page.waitForFunction(() => document.getElementById('account')?.dataset.player !== 'guest');
   await page.waitForFunction(() => !(document.getElementById('play') as HTMLButtonElement).disabled);
   return page.frames().find(f => f.url().endsWith('/game.html'))!;
+}
+async function chooseWalletAndAccount(page: Page) {
+  await page.locator('#wallet-list button').filter({ hasText: 'MetaMask' }).click();
+  await page.locator('#wallet-account-picker[open] button[type=submit]').click();
 }
 async function writeProgress(page: Page, name: string) {
   const frame = page.frames().find(f => f.url().endsWith('/game.html'))!;
@@ -122,6 +128,7 @@ try {
   await offline.screenshot({ path: 'test-results/guest-offline.png' });
   await page.evaluate(() => { (window as any).rejectSignature = true; });
   await page.click('#connect-wallet');
+  await chooseWalletAndAccount(page);
   await page.waitForFunction(() => document.getElementById('account-status')?.textContent?.includes('cancelled'));
   assert.equal(await page.getAttribute('#account', 'data-player'), 'guest');
   assert.deepEqual(errors, []);

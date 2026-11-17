@@ -7,6 +7,7 @@ import { Window } from 'happy-dom';
 import { buildApp } from '../src/app.js';
 import { writeSave } from '../src/saves.js';
 import { testDatabase } from './database.js';
+import { installDialogHooks, confirmAccount } from './wallet-ui.js';
 const { Wallet } = createRequire(import.meta.url)('ethers/wallet') as typeof import('ethers/wallet');
 const origin = 'http://localhost:8080';
 const web = new URL('../../web/', import.meta.url);
@@ -38,6 +39,7 @@ test('launcher signs in without naming, syncs game profiles, and handles conflic
   const handlers: Record<string, Function[]> = {};
   try {
     win.document.write(await source('index.html'));
+    installDialogHooks(win);
     (win as any).fetch = async (path: string, options: any = {}) => {
       const response = await app.fetch(new Request(new URL(path, origin), { ...options, signal: undefined,
         headers: { ...options.headers, origin, cookie } }));
@@ -57,6 +59,7 @@ test('launcher signs in without naming, syncs game profiles, and handles conflic
       },
     };
     win.eval(await source('progress.js'));
+    win.eval(await source('wallets.js'));
     win.eval(await source('account.js'));
     await (win as any).STKAccount.ready;
     assert.equal(win.document.querySelector('#profile-form'), null);
@@ -75,7 +78,10 @@ test('launcher signs in without naming, syncs game profiles, and handles conflic
         action();
       });
     }
-    await settled(() => connect.click());
+    const connecting = settled(() => connect.click());
+    (win.document.querySelector('#wallet-list button:not(:disabled)') as any).click();
+    await confirmAccount(win, wallet.address);
+    await connecting;
     const id = win.document.querySelector('#account')!.getAttribute('data-player')!;
     assert.match(id, /^[a-f0-9-]{36}$/);
     const frame = win.document.createElement('iframe'); frame.id = 'game'; win.document.querySelector('#session')!.appendChild(frame);

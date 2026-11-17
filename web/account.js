@@ -14,6 +14,7 @@
     connect.textContent = registered ? 'Link another wallet' : 'Connect wallet';
     for (const button of panel.querySelectorAll('button, input')) button.disabled = busy || playing;
     panel.dataset.player = registered ? player.id : 'guest';
+    window.dispatchEvent(new CustomEvent('stk-account-busy', { detail: { busy } }));
   }
   async function api(path, method = 'GET', body) {
     const response = await fetch('/api/' + path, { method, credentials: 'same-origin', cache: 'no-store',
@@ -41,12 +42,11 @@
   const ready = (async () => {
     try {
       [config] = await Promise.all([api('config'), refresh()]);
-      attachProvider(window.ethereum);
       text(player?.kind === 'registered' ? 'Wallet connected. Press Play to continue with your in-game player.' : 'Playing as a guest. Connect a wallet to save progress across devices.');
     } catch { text('Guest play is available. Cloud accounts are currently unavailable.'); }
     render();
   })();
-  window.STKAccount = { ready };
+  window.STKAccount = { ready, get busy() { return busy; } };
   function choose(current, local) {
     document.getElementById('cloud-save-detail').textContent = `Cloud revision ${current.revision}${current.updatedAt ? ', saved ' + new Date(current.updatedAt).toLocaleString() : ''}.`;
     dialog.showModal();
@@ -137,35 +137,49 @@
     if (busy || playing) return;
     busy = true; signing = true; render();
     const wasGuest = player?.kind !== 'registered';
+    let verified = false;
     try {
       config ??= await api('config');
-      const next = window.ethereum;
-      if (!next?.request) throw new Error('Install an injected desktop Ethereum wallet to connect.');
-      attachProvider(next);
-      if (!wasGuest) await provider.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] });
-      const accounts = await provider.request({ method: 'eth_requestAccounts' });
-      const address = accounts?.[0];
+      const wallet = await STKWallets.select();
+      if (!wallet) throw Object.assign(new Error('Wallet selection cancelled.'), { code: 4001 });
+      const chosenProvider = wallet.provider;
+      text('Choose an account in ' + wallet.name + '.');
+      const address = await STKWallets.chooseAccount(wallet);
+      if (!address) throw Object.assign(new Error('Account selection cancelled.'), { code: 4001 });
       if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new Error('No wallet account selected.');
-      const chain = await provider.request({ method: 'eth_chainId' });
+      if (!wasGuest && player.wallets.includes(address.toLowerCase())) throw new Error('That account is already linked to your player. Choose a different account to link.');
+      const chain = await chosenProvider.request({ method: 'eth_chainId' });
       if (chain.toLowerCase() !== config.chain.chainId) {
-        try { await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] }); }
+        try { await chosenProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] }); }
         catch (error) {
           if (error.code !== 4902) throw error;
-          await provider.request({ method: 'wallet_addEthereumChain', params: [config.chain] });
-          await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] });
+          await chosenProvider.request({ method: 'wallet_addEthereumChain', params: [config.chain] });
+          await chosenProvider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: config.chain.chainId }] });
         }
       }
-      await api('guest', 'POST');
+      if ((await chosenProvider.request({ method: 'eth_chainId' })).toLowerCase() !== config.chain.chainId)
+        throw new Error(wallet.name + ' could not connect to OP Sepolia. Choose a wallet that supports this network.');
+      if (wasGuest) await api('guest', 'POST');
       const challenge = await api('auth/challenge', 'POST', { address, chainId: config.chainId, purpose: wasGuest ? 'login' : 'link' });
       const message = '0x' + Array.from(new TextEncoder().encode(challenge.message), b => b.toString(16).padStart(2, '0')).join('');
-      const signature = await provider.request({ method: 'personal_sign', params: [message, address] });
-      const selected = await provider.request({ method: 'eth_accounts' });
-      const selectedChain = await provider.request({ method: 'eth_chainId' });
-      if (selected?.[0]?.toLowerCase() !== address.toLowerCase() || selectedChain.toLowerCase() !== config.chain.chainId) throw new Error('Wallet changed while signing. Please try again.');
+      const signature = await chosenProvider.request({ method: 'personal_sign', params: [message, address] });
+      const selected = await chosenProvider.request({ method: 'eth_accounts' });
+      const selectedChain = await chosenProvider.request({ method: 'eth_chainId' });
+      if (!Array.isArray(selected) || !selected.some(value => typeof value === 'string' && value.toLowerCase() === address.toLowerCase()) || selectedChain.toLowerCase() !== config.chain.chainId) throw new Error('Wallet changed while signing. Please try again.');
       await api('auth/verify', 'POST', { id: challenge.id, signature });
+      verified = true;
       await refresh(); importGuest = wasGuest; changed();
-      text('Wallet connected. Press Play to choose or continue your player profile.');
-    } catch (error) { text(error.code === 4001 ? 'Wallet request cancelled. Guest play remains available.' : error.message); }
+      attachProvider(chosenProvider);
+      text(wallet.name + ' connected. Press Play to choose or continue your player profile.');
+    } catch (error) {
+      if (verified) { player = null; importGuest = false; changed(); text('Wallet sign-in succeeded, but the player could not be loaded. Reload to continue.'); }
+      else if (STKWallets.errorCode(error) === 4001) text(wasGuest ? 'Wallet request cancelled. Guest play remains available.' : 'Wallet request cancelled. Your current player is unchanged.');
+      else if (STKWallets.errorCode(error) === -32002) text('A request is already pending in your selected wallet. Open it to finish or cancel the request.');
+      else if (error.data?.error === 'wallet_belongs_to_another_player') text('That wallet account belongs to another player. Sign out first to connect to that player.');
+      else if (error.data?.error === 'account_changed') text('Your sign-in changed in another tab. Reload before connecting a wallet.');
+      else if (error.status === 401) text('Your sign-in expired. Reload the page, then choose your wallet and account again.');
+      else text(error.message);
+    }
     finally { signing = false; busy = false; render(); }
   });
   logout.addEventListener('click', async () => {

@@ -158,6 +158,12 @@ test('a stale tab cannot read or write progress after the browser switches accou
   assert.equal((await bob.client.request('/api/progress')).data.payload, null);
   assert.equal((await bob.client.request('/api/session')).data.player.id, bob.playerId);
 });
+test('a stale guest tab cannot silently link a new wallet to another tab\'s signed-in player', async () => {
+  const alice = await signIn(), next = Wallet.createRandom();
+  const response = await alice.client.request('/api/auth/challenge', 'POST', { address: next.address, chainId: 11155420, purpose: 'login' });
+  assert.equal(response.status, 409); assert.equal(response.data.error, 'account_changed');
+  assert.equal((await db.query('SELECT address FROM wallets WHERE address = $1', [next.address.toLowerCase()])).rows.length, 0);
+});
 test('malformed saves, upstream credentials, and unauthenticated uploads are rejected', async () => {
   const { client } = await signIn();
   for (const playersXml of ['<not-players/>', '<players/><other/>', '<players/><players/>', '<players><broken></players>', '<!DOCTYPE players><players></players>', '<players><player saved-token="secret"/></players>', '<players><player saved-user="123"/></players>']) {
@@ -172,6 +178,9 @@ test('foreign origins/hosts, oversized bodies, and private files are rejected', 
   assert.equal(foreign.status, 403);
   assert.equal((await browser().request('/api/auth/challenge', 'POST', { pad: 'x'.repeat(1_100_001) })).status, 413);
   assert.equal((await app.fetch(new Request(origin + '/platform/.env'))).status, 404);
+  const script = await app.fetch(new Request(origin + '/wallets.js'));
+  assert.equal(script.status, 200); assert.match(script.headers.get('content-type')!, /javascript/);
+  assert.match(await script.text(), /eip6963:announceProvider/);
 });
 test('HTTPS sessions use Secure host-only cookies and API throttles writes', async () => {
   const secure = buildApp(db, { origin: 'https://game.example', rateMax: 1 });

@@ -42,13 +42,31 @@ does not prevent local guest startup. It does not provide cloud accounts.
 - An injected desktop EVM wallet signs a server-created ERC-4361 message for
   OP Sepolia (`11155420`). Sign-in is off-chain and needs no gas. The first slice
   supports EOA signatures; WalletConnect and contract-wallet signatures are not supported.
+- Connect wallet first shows installed wallet apps, then the accounts shared by
+  the chosen app. Discovery uses EIP-6963 with legacy provider-array and named
+  Phantom fallbacks. The app does not automatically use whichever extension owns
+  `window.ethereum`. Only the selected provider receives permission, account,
+  network and signature requests. Returning sessions restore via the application
+  cookie without opening or attaching to an arbitrary wallet extension.
+- The account step confirms the address explicitly, including non-first addresses.
+  Wallets that cannot reopen permission selection fall back to their already shared
+  accounts. To use a missing account, share it through the selected wallet's site
+  permissions. Cancellation leaves the current player unchanged. Sign out and
+  reconnect to use another player's wallet account; Link another wallet adds a
+  credential to the current player and never silently merges existing players.
+- Phantom is discoverable but disabled for OP Sepolia. As of 2026-11-17, its
+  official support documentation lists Optimism as unsupported and does not list
+  OP Sepolia as a testnet. Other selected EVM wallets must pass the network check.
+  Sources: [Phantom networks](https://help.phantom.com/articles/41372840389651),
+  [Phantom testnets](https://help.phantom.com/articles/5997313271699),
+  [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963).
 - First sign-in upgrades a backend guest to a stable UUID. A known wallet restores
   its existing player. Linking a wallet already attached elsewhere is rejected;
   accounts and progress are not silently merged.
 - A browser session is a random token in an HttpOnly/SameSite cookie, stored only
   as a SHA-256 hash server-side. Challenges expire after five minutes and sessions
   after seven days. Authentication rotates the token; logout revokes it.
-- Wallet/account/network events stop syncing and require sign-in again. Account
+- The actively selected wallet's account/network events stop syncing and require sign-in again. Account
   controls stay disabled during play. Requests include the expected player ID so
   an old tab cannot write to an account selected in another tab.
 - Registered players use `/persist/accounts/<player-id>/` inside browser saves;
@@ -111,3 +129,17 @@ deployment or contract transaction has been performed.
 The initial rate limiter is in-process and intended for one backend instance.
 Before multi-instance deployment, use shared throttling, tune limits for shared
 networks, add session/guest-retention cleanup, and verify database backup/restore.
+
+## Applying the wallet-app picker update
+
+After applying the branch, restart `npm start` from `platform/` and refresh the
+browser. The backend must restart to serve the new `wallets.js` launcher module.
+This update needs no new dependencies, database migration, or Wasm rebuild for
+the platform server. Guest-only static builds copy the module on CMake configure.
+
+For manual acceptance, enable MetaMask and Phantom together. Connect wallet must
+show both, with Phantom's OP Sepolia limitation visible. Choosing MetaMask must
+open only MetaMask. Authorize multiple accounts and confirm a non-first address
+on the site, then sign in. Sign out and repeat with a different account. Cancel
+each picker and the signing prompt to verify no unintended player change. The
+automated tests simulate providers; they cannot verify the real extension popup.

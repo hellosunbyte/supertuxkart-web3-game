@@ -32,6 +32,7 @@ export async function guest(db: Database) {
 }
 export async function challenge(db: Database, identity: Identity, origin: string, address: string, purpose: string) {
   if (purpose === 'link' && identity.kind !== 'registered') throw new ApiError(403, 'sign_in_first');
+  if (purpose === 'login' && identity.kind === 'registered') throw new ApiError(409, 'account_changed');
   if (purpose === 'recover') throw new ApiError(409, 'recovery_not_supported');
   let checksumAddress: string;
   try { checksumAddress = getAddress(address); } catch { throw new ApiError(400, 'invalid_wallet_address'); }

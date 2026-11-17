@@ -97,7 +97,7 @@ export function buildApp(db: Database, options: { origin: string; gameDir?: stri
     if (!['GET', 'HEAD'].includes(request.method)) throw new ApiError(405, 'method_not_allowed');
     const path = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     const source = fileURLToPath(new URL('../../web/', import.meta.url));
-    const publicFiles = new Set(['index.html', 'game.html', 'account.js', 'progress.js', 'cloud-bridge.js']);
+    const publicFiles = new Set(['index.html', 'game.html', 'account.js', 'wallets.js', 'progress.js', 'cloud-bridge.js']);
     let root = source;
     if (!publicFiles.has(path)) {
       if (!options.gameDir || !/^supertuxkart[.\w-]*\.(js|wasm|data)$/.test(path)) throw new ApiError(404, 'not_found');
