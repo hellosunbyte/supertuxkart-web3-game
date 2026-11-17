@@ -1,0 +1,41 @@
+--- a/WEB3_GAME_PLAN.md
++++ b/WEB3_GAME_PLAN.md
+@@ -110,18 +110,30 @@
+ 
+ ## Phase 2: Build the player platform
+ 
++**Status: Implementation complete; manual acceptance pending (2026-11-17).**
++
+ Estimated effort: **2–4 engineer-weeks**.
+ 
+-- [ ] Decide the initial chain and supported wallet flows.
+-- [ ] Provision PostgreSQL for backend services and add schema migrations for
++- [x] Select OP Sepolia and implement wallet-app discovery followed by account
++  selection, with the same capability checks for every detected EVM wallet.
++- [x] Add PostgreSQL configuration, local provisioning instructions, and schema migrations for
+   player profiles, wallet associations, and cloud progress.
+-- [ ] Implement wallet authentication with server-issued, single-use challenges,
++- [x] Implement wallet authentication with server-issued, single-use challenges,
+   signature verification, and expiring application sessions.
+-- [ ] Create backend player profiles and guest-to-wallet account linking.
+-- [ ] Define cloud progress storage and conflict handling with browser saves.
+-- [ ] Add a narrow, validated web-to-C++ bridge for identity and inventory.
+-- [ ] Exercise rejected signatures, wallet disconnects, account/network changes,
+-  and compatibility with the game's cross-origin isolation setup.
++- [x] Create backend player profiles and guest-to-wallet account linking.
++- [x] Implement cloud progress storage, revision checks, and explicit conflict choices
++  for browser saves; sync the selected in-game player name with progress.
++- [x] Implement the narrow web-to-C++ identity/inventory bridge and validate the
++  browser save bridge in DOM tests.
++- [x] Pass 31 API/DOM tests and TypeScript checks, including signature replay/expiry,
++  wallet lifecycle, provider selection, network capability checks, and save isolation.
++- [ ] Record acceptance against standalone PostgreSQL and a clean dependency install.
++- [ ] Verify real wallet extensions with the threaded game's cross-origin isolation setup.
++- [ ] Confirm rebuilt native gameplay and cloud save/restore across supported devices.
++
++Wallet-loss recovery is deferred at the user's request and does not block the
++agreed implementation scope. Detailed evidence and remaining verification limits
++are recorded in [Phase 02 workflow](PHASE_02_WORKFLOW.md).
+ 
+ Exit criterion: a player can authenticate and retain their identity/progress
+ across supported sessions and devices.

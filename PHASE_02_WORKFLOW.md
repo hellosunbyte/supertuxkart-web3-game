@@ -1,5 +1,7 @@
 # Phase 02 — player platform
 
+**Status: Implementation complete; manual acceptance pending (2026-11-17).**
+
 This is the review log for implementation, in dependency order. Each completed
 milestone gets its own commit. No contracts or production deployment are included.
 
